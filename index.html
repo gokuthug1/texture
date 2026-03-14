@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ULTIMATE Texture Generator 3D</title>
+    <title>ULTIMATE Texture Generator 3D - PRO</title>
     <!-- Import Three.js -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <!-- Import OrbitControls -->
@@ -91,7 +91,6 @@
         }
         
         summary:hover { background: #505050; }
-        
         summary::after { content: '+'; font-weight: bold; color: var(--primary); }
         details[open] summary::after { content: '-'; }
 
@@ -233,30 +232,20 @@
             background: rgba(0,0,0,0.85); color: white;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 10; pointer-events: none; opacity: 0; transition: opacity 0.2s;
-            text-align: center;
+            text-align: center; font-weight: bold; font-size: 1.2rem;
         }
         #loader.active { opacity: 1; pointer-events: all; }
+        #loader span { font-size: 0.8rem; font-weight: normal; margin-top: 5px; color: #aaa; }
         
         /* Status Banner */
-        #uploadStatus {
-            font-size: 0.8em;
-            color: #2ecc71;
-            display: none;
-            margin-bottom: 10px;
-        }
-        
-        #resWarning {
-            color: #e74c3c;
-            font-size: 0.75rem;
-            display: none;
-            margin-top: 5px;
-        }
+        #uploadStatus { font-size: 0.8em; color: #2ecc71; display: none; margin-bottom: 10px; }
+        #resWarning { color: #e74c3c; font-size: 0.75rem; display: none; margin-top: 5px; }
 
     </style>
 </head>
 <body>
 
-    <h1>Ultimate Texture Generator <span style="font-size:0.5em; color:#888;">3D EDITION</span></h1>
+    <h1>Ultimate Texture Generator <span style="font-size:0.5em; color:#888;">PRO EDITION</span></h1>
 
     <div class="main-container">
         <!-- Controls Side -->
@@ -297,17 +286,17 @@
                         <option value="1280x720">HD (720p) - 1280x720</option>
                         <option value="1920x1080">Full HD (1080p) - 1920x1080</option>
                         <option value="2560x1440">QHD (2K) - 2560x1440</option>
-                        <option value="3840x2160">4K UHD - 3840x2160</option>
-                        <option value="7680x4320">8K UHD - 7680x4320</option>
+                        <option value="3840x2160">4K UHD - 3840x2160 (Heavy)</option>
+                        <option value="7680x4320">8K UHD - 7680x4320 (Extreme)</option>
                         <option value="custom">Custom Dimensions</option>
                     </select>
 
                     <div class="row">
-                        <input type="number" id="texWidth" value="256" placeholder="W">
+                        <input type="number" id="texWidth" value="256" placeholder="W" min="1" max="8192">
                         <span>x</span>
-                        <input type="number" id="texHeight" value="256" placeholder="H">
+                        <input type="number" id="texHeight" value="256" placeholder="H" min="1" max="8192">
                     </div>
-                    <div id="resWarning">⚠️ High Resolution! Generation may freeze browser.</div>
+                    <div id="resWarning">⚠️ High Resolution selected. Please be patient.</div>
 
                     <label style="margin-top:15px;">Seed (Randomness)</label>
                     <div class="row">
@@ -333,7 +322,7 @@
                     <label>Detail Layers (Octaves): <span class="val" id="octavesVal">4</span></label>
                     <input type="range" id="octaves" min="1" max="10" value="4">
 
-                    <label>Roughness (Persistence): <span class="val" id="persistVal">0.5</span></label>
+                    <label>Roughness (Persistence): <span class="val" id="persistenceVal">0.5</span></label>
                     <input type="range" id="persistence" min="0" max="1" step="0.05" value="0.5">
                     
                     <label>Detail Size (Lacunarity): <span class="val" id="lacunarityVal">2.0</span></label>
@@ -402,13 +391,29 @@
                         <input type="checkbox" id="thresholdEnable">
                         <label for="thresholdEnable">Hard Threshold</label>
                     </div>
+                    
+                    <label>Threshold Level: <span class="val" id="thresholdVal">0.5</span></label>
                     <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
+                </div>
+            </details>
+            
+            <details open>
+                <summary>Material & 3D Settings</summary>
+                <div class="control-group">
+                    <label>Bump Map Depth: <span class="val" id="bumpScaleVal">0.2</span></label>
+                    <input type="range" id="bumpScale" min="0" max="2" step="0.05" value="0.2">
+
+                    <label>Material Roughness: <span class="val" id="matRoughnessVal">0.6</span></label>
+                    <input type="range" id="matRoughness" min="0" max="1" step="0.05" value="0.6">
+
+                    <label>Material Metalness: <span class="val" id="matMetalnessVal">0.1</span></label>
+                    <input type="range" id="matMetalness" min="0" max="1" step="0.05" value="0.1">
                 </div>
             </details>
 
             <div class="action-buttons">
                 <button class="action-btn btn-random" id="randomBtn">Randomize</button>
-                <button class="action-btn btn-generate" id="generateBtn">Update Texture</button>
+                <button class="action-btn btn-generate" id="generateBtn">Force Render</button>
             </div>
         </div>
 
@@ -432,11 +437,10 @@
                     </select>
                 </div>
                 <div id="threeContainer">
-                    <div id="loader">Processing Texture...<br><span style="font-size:0.8em; font-weight:normal;">Large resolutions take longer</span></div>
-                </div>
-                <div class="control-group" style="width: 100%; border: none; padding-bottom: 0;">
-                    <label>Bump Map Strength (Depth): <span class="val" id="bumpVal">0.2</span></label>
-                    <input type="range" id="bumpScale" min="0" max="2" step="0.05" value="0.2">
+                    <div id="loader">
+                        <div id="loaderText">Processing Texture...</div>
+                        <span>Large resolutions utilize async chunking to prevent freezes.</span>
+                    </div>
                 </div>
             </div>
 
@@ -454,7 +458,8 @@
 
 <script>
 /**
- * ULTIMATE Texture Generator 3D
+ * ULTIMATE Texture Generator 3D - PRO EDITION
+ * Fully optimized async generation and PBR implementation.
  */
 
 // --- 1. UTILITIES & MATH ---
@@ -473,7 +478,7 @@ const lerp = (a, b, t) => a + t * (b - a);
 const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
 const hexToRgb = (hex) => {
     const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
+    return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] :[0, 0, 0];
 };
 
 // --- 2. NOISE GENERATOR CLASS ---
@@ -515,7 +520,7 @@ class NoiseGenerator {
         const n11 = this.perm[X + 1 + this.perm[Y + 1]] / 255;
         return (lerp(lerp(n00, n10, u), lerp(n01, n11, u), v) * 2) - 1;
     }
-    worley(x, y, type, distMetric) {
+    worley(x, y, type, isManhattan) {
         const xInt = Math.floor(x); const yInt = Math.floor(y);
         const xFrac = x - xInt; const yFrac = y - yInt;
         let minDist = 100; let secondMinDist = 100;
@@ -528,7 +533,7 @@ class NoiseGenerator {
                 hash = (Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.prng.seed) * 23421.6543);
                 hash = hash - Math.floor(hash); const pointY = yNeighbor + hash;
                 const diffX = pointX - xFrac; const diffY = pointY - yFrac;
-                let d = (distMetric === 'manhattan') ? Math.abs(diffX) + Math.abs(diffY) : Math.sqrt(diffX*diffX + diffY*diffY);
+                let d = isManhattan ? Math.abs(diffX) + Math.abs(diffY) : Math.sqrt(diffX*diffX + diffY*diffY);
                 if (d < minDist) { secondMinDist = minDist; minDist = d; } else if (d < secondMinDist) { secondMinDist = d; }
             }
         }
@@ -561,13 +566,15 @@ class ThreeController {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
 
-        // Lights
-        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
-        this.scene.add(ambient);
-        
+        // Enhanced Lighting for PBR reflection visualization
+        const ambient = new THREE.AmbientLight(0xffffff, 0.3);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(5, 10, 7);
-        this.scene.add(dirLight);
+        const backLight = new THREE.DirectionalLight(0xabcdef, 0.4);
+        backLight.position.set(-5, -10, -7);
+        const fillLight = new THREE.DirectionalLight(0xffccaa, 0.3);
+        fillLight.position.set(5, 0, -5);
+        this.scene.add(ambient, dirLight, backLight, fillLight);
 
         // Grid
         const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
@@ -582,7 +589,7 @@ class ThreeController {
         });
 
         this.initGeometries();
-        this.setMesh('block'); // Default
+        this.setMesh('block');
         this.animate();
 
         window.addEventListener('resize', () => {
@@ -595,16 +602,16 @@ class ThreeController {
     initGeometries() {
         this.geometries = {};
 
-        // Primitives
-        this.geometries.block = new THREE.BoxGeometry(1, 1, 1);
+        // Higher segment counts for smoother bumps
+        this.geometries.block = new THREE.BoxGeometry(1, 1, 1, 16, 16, 16);
         this.geometries.sphere = new THREE.SphereGeometry(0.6, 64, 64);
-        this.geometries.cylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 32);
-        this.geometries.torus = new THREE.TorusGeometry(0.4, 0.15, 16, 50);
-        this.geometries.plane = new THREE.PlaneGeometry(1.5, 1.5);
-        this.geometries.cone = new THREE.ConeGeometry(0.5, 1, 32);
-        this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.6, 0);
+        this.geometries.cylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 64, 16);
+        this.geometries.torus = new THREE.TorusGeometry(0.4, 0.15, 32, 100);
+        this.geometries.plane = new THREE.PlaneGeometry(1.5, 1.5, 32, 32);
+        this.geometries.cone = new THREE.ConeGeometry(0.5, 1, 64);
+        this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.6, 16);
 
-        // Wedge (Manual)
+        // Wedges remain manual mapping
         const wedgeGeo = new THREE.BufferGeometry();
         const wedgeVertices = new Float32Array([
             -0.5, -0.5, 0.5,   0.5, -0.5, 0.5,  -0.5, -0.5, -0.5, 
@@ -627,7 +634,6 @@ class ThreeController {
         wedgeGeo.computeVertexNormals();
         this.geometries.wedge = wedgeGeo;
 
-        // Corner Wedge (Manual)
         const cornerGeo = new THREE.BufferGeometry();
         const cornerVertices = new Float32Array([
             -0.5, -0.5, 0.5,  0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
@@ -654,7 +660,15 @@ class ThreeController {
         this.scene.add(this.mesh);
     }
 
-    updateTexture(canvas, bumpScale) {
+    updateMaterial() {
+        if(!this.material) return;
+        this.material.roughness = parseFloat(document.getElementById('matRoughness').value);
+        this.material.metalness = parseFloat(document.getElementById('matMetalness').value);
+        this.material.bumpScale = parseFloat(document.getElementById('bumpScale').value);
+        this.material.needsUpdate = true;
+    }
+
+    updateTexture(canvas) {
         if(this.currentTexture) this.currentTexture.dispose();
         
         this.currentTexture = new THREE.CanvasTexture(canvas);
@@ -663,8 +677,7 @@ class ThreeController {
         
         this.material.map = this.currentTexture;
         this.material.bumpMap = this.currentTexture;
-        this.material.bumpScale = bumpScale;
-        this.material.needsUpdate = true;
+        this.updateMaterial();
     }
 
     animate() {
@@ -675,50 +688,56 @@ class ThreeController {
     }
 }
 
-
 // --- 4. APP STATE & LOGIC ---
 
 const state = {
-    gradientStops: [{ pos: 0.0, color: "#000000" }, { pos: 1.0, color: "#ffffff" }],
+    gradientStops:[{ pos: 0.0, color: "#000000" }, { pos: 1.0, color: "#ffffff" }],
     canvas: document.getElementById('textureCanvas'),
     inputs: {},
     uploadedImage: null
 };
-const ctx = state.canvas.getContext('2d');
-let threeView = null; // Will initialize on load
+const ctx = state.canvas.getContext('2d', { willReadFrequently: true });
+let threeView = null; 
+let currentGenId = 0; // ID Tracker for Async Generator
 
 function init() {
     threeView = new ThreeController('threeContainer');
 
-    // Bind IDs
-    const ids = [
+    const ids =[
         'texWidth', 'texHeight', 'seed', 'noiseType', 'scale', 'octaves', 
         'persistence', 'lacunarity', 'ridged', 
         'turbStrength', 'turbScale', 'worleyType', 'worleyDist',
         'contrast', 'brightness', 'invert', 'thresholdEnable', 'threshold',
-        'bumpScale'
+        'bumpScale', 'matRoughness', 'matMetalness'
     ];
     
     ids.forEach(id => {
         const el = document.getElementById(id);
+        if(!el) return;
         state.inputs[id] = el;
+        
         el.addEventListener('input', (e) => {
             if(id === 'texWidth' || id === 'texHeight') {
                 document.getElementById('resPreset').value = 'custom';
                 checkResWarning();
             }
-            updateValueLabel(id, e.target.value);
-            debouncedGenerate();
-            if(id !== 'bumpScale') document.getElementById('presetSelect').value = 'custom';
+            if(el.type === 'range') updateValueLabel(id, e.target.value);
+
+            // Optimization: Change Material settings without redrawing 2D Canvas!
+            if (['matRoughness', 'matMetalness', 'bumpScale'].includes(id)) {
+                threeView.updateMaterial();
+            } else {
+                document.getElementById('presetSelect').value = 'custom';
+                debouncedGenerate();
+            }
         });
     });
 
-    // Resolution Preset Handler
     const resPreset = document.getElementById('resPreset');
     resPreset.addEventListener('change', (e) => {
         const val = e.target.value;
         if(val !== 'custom') {
-            const [w, h] = val.split('x').map(Number);
+            const[w, h] = val.split('x').map(Number);
             document.getElementById('texWidth').value = w;
             document.getElementById('texHeight').value = h;
             checkResWarning();
@@ -726,12 +745,9 @@ function init() {
         }
     });
 
-    // Image Upload
-    const imgInput = document.getElementById('imageInput');
-    imgInput.addEventListener('change', handleImageUpload);
+    document.getElementById('imageInput').addEventListener('change', handleImageUpload);
     document.getElementById('clearImageBtn').addEventListener('click', clearImageUpload);
 
-    // Button Events
     document.getElementById('generateBtn').addEventListener('click', generateTexture);
     document.getElementById('randomBtn').addEventListener('click', randomize);
     document.getElementById('downloadBtn').addEventListener('click', download);
@@ -741,7 +757,6 @@ function init() {
     });
     document.getElementById('addStopBtn').addEventListener('click', () => addGradientStop(0.5, "#808080"));
     
-    // Selects
     document.getElementById('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
     
     document.getElementById('meshSelect').addEventListener('change', (e) => {
@@ -755,10 +770,9 @@ function init() {
 // --- Helper Functions ---
 
 function checkResWarning() {
-    const w = parseInt(document.getElementById('texWidth').value);
-    const h = parseInt(document.getElementById('texHeight').value);
+    const w = parseInt(state.inputs.texWidth.value);
+    const h = parseInt(state.inputs.texHeight.value);
     const warning = document.getElementById('resWarning');
-    // Warn if pixel count > 4K pixels
     if(w * h > 3840 * 2160) {
         warning.style.display = 'block';
     } else {
@@ -791,13 +805,8 @@ function clearImageUpload() {
 }
 
 function updateValueLabel(id, val) {
-    const map = {
-        'scale': 'scaleVal', 'octaves': 'octavesVal',
-        'persistence': 'persistVal', 'lacunarity': 'lacunarityVal',
-        'turbStrength': 'turbStrengthVal', 'turbScale': 'turbScaleVal',
-        'contrast': 'contrastVal', 'brightness': 'brightnessVal', 'bumpScale': 'bumpVal'
-    };
-    if(map[id]) document.getElementById(map[id]).innerText = val;
+    const labelEl = document.getElementById(id + 'Val');
+    if(labelEl) labelEl.innerText = val;
 }
 
 let debounceTimer;
@@ -806,135 +815,157 @@ function debouncedGenerate() {
     debounceTimer = setTimeout(generateTexture, 50);
 }
 
-// --- 5. TEXTURE GENERATION CORE ---
+// --- 5. ASYNC TEXTURE GENERATION CORE ---
 
-function generateTexture() {
+async function generateTexture() {
+    currentGenId++;
+    const genId = currentGenId; // Freeze the ID for this specific thread loop
+
     const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loaderText');
     loader.classList.add('active');
+    loaderText.innerText = 'Starting Generator...';
 
-    // Timeout to allow UI render
-    setTimeout(() => {
-        const width = parseInt(state.inputs.texWidth.value);
-        const height = parseInt(state.inputs.texHeight.value);
-        state.canvas.width = width;
-        state.canvas.height = height;
+    // Yield immediately so UI can show the loader
+    await new Promise(r => setTimeout(r, 10));
 
-        // If Custom Image Exists
-        if(state.uploadedImage) {
-            ctx.drawImage(state.uploadedImage, 0, 0, width, height);
-            threeView.updateTexture(state.canvas, parseFloat(state.inputs.bumpScale.value));
-            loader.classList.remove('active');
-            return; 
-        }
+    const width = Math.min(8192, Math.max(1, parseInt(state.inputs.texWidth.value) || 256));
+    const height = Math.min(8192, Math.max(1, parseInt(state.inputs.texHeight.value) || 256));
+    state.canvas.width = width;
+    state.canvas.height = height;
 
-        // --- Procedural Generation Logic ---
-        const seed = parseInt(state.inputs.seed.value);
-        const scale = parseInt(state.inputs.scale.value);
-        const octaves = parseInt(state.inputs.octaves.value);
-        const persistence = parseFloat(state.inputs.persistence.value);
-        const lacunarity = parseFloat(state.inputs.lacunarity.value);
-        const isRidged = state.inputs.ridged.checked;
-        const turbStrength = parseInt(state.inputs.turbStrength.value);
-        const turbScale = parseInt(state.inputs.turbScale.value);
-        const contrast = parseFloat(state.inputs.contrast.value);
-        const brightness = parseFloat(state.inputs.brightness.value);
-        const invert = state.inputs.invert.checked;
-        const threshEnable = state.inputs.thresholdEnable.checked;
-        const threshVal = parseFloat(state.inputs.threshold.value);
-        const noiseType = state.inputs.noiseType.value;
-        const wType = state.inputs.worleyType.value;
-        const wDist = state.inputs.worleyDist.value;
+    if(state.uploadedImage) {
+        ctx.drawImage(state.uploadedImage, 0, 0, width, height);
+        threeView.updateTexture(state.canvas);
+        loader.classList.remove('active');
+        return; 
+    }
 
-        const noiseGen = new NoiseGenerator(seed);
-        const turbGen = new NoiseGenerator(seed + 999);
+    const seed = parseInt(state.inputs.seed.value);
+    const scale = parseInt(state.inputs.scale.value);
+    const octaves = parseInt(state.inputs.octaves.value);
+    const persistence = parseFloat(state.inputs.persistence.value);
+    const lacunarity = parseFloat(state.inputs.lacunarity.value);
+    const isRidged = state.inputs.ridged.checked;
+    const turbStrength = parseInt(state.inputs.turbStrength.value);
+    const turbScale = parseInt(state.inputs.turbScale.value);
+    const contrast = parseFloat(state.inputs.contrast.value);
+    const brightness = parseFloat(state.inputs.brightness.value);
+    const invert = state.inputs.invert.checked;
+    const threshEnable = state.inputs.thresholdEnable.checked;
+    const threshVal = parseFloat(state.inputs.threshold.value);
+    const noiseType = state.inputs.noiseType.value;
+    const wType = state.inputs.worleyType.value;
+    const isManhattan = state.inputs.worleyDist.value === 'manhattan';
 
-        const gradientLUT = new Uint8ClampedArray(256 * 4);
-        for(let i=0; i<256; i++) {
-            const rgb = mapColor(i/255);
-            gradientLUT[i*4] = rgb[0]; gradientLUT[i*4+1] = rgb[1]; gradientLUT[i*4+2] = rgb[2]; gradientLUT[i*4+3] = 255;
-        }
+    const noiseGen = new NoiseGenerator(seed);
+    const turbGen = new NoiseGenerator(seed + 999);
 
-        const imgData = ctx.createImageData(width, height);
-        const data = imgData.data;
-
-        for (let y = 0; y < height; y++) {
-            for (let x = 0; x < width; x++) {
-                let nx = x; let ny = y;
-                if (turbStrength > 0) {
-                    const tx = turbGen.perlin(x / turbScale, y / turbScale);
-                    const ty = turbGen.perlin((x + 1000) / turbScale, (y + 1000) / turbScale);
-                    nx += tx * turbStrength; ny += ty * turbStrength;
-                }
-
-                let amplitude = 1; let frequency = 1; let noiseValue = 0; let maxValue = 0;
-
-                for (let o = 0; o < octaves; o++) {
-                    const sampleX = nx / scale * frequency;
-                    const sampleY = ny / scale * frequency;
-                    let n;
-                    if (noiseType === 'perlin') n = noiseGen.perlin(sampleX, sampleY);
-                    else if (noiseType === 'value') n = noiseGen.value(sampleX, sampleY);
-                    else n = noiseGen.worley(sampleX, sampleY, wType, wDist);
-
-                    if (isRidged) { n = 1.0 - Math.abs(n); n = n * n; }
-                    noiseValue += n * amplitude; maxValue += amplitude;
-                    amplitude *= persistence; frequency *= lacunarity;
-                }
-
-                if (!isRidged && noiseType !== 'worley') noiseValue = (noiseValue / maxValue + 1) / 2;
-                else { noiseValue = noiseValue / maxValue; if(noiseType === 'worley' && wType === 'f2-f1') noiseValue += 0.5; }
-                
-                if (invert) noiseValue = 1.0 - noiseValue;
-                noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
-                noiseValue = Math.max(0, Math.min(1, noiseValue));
-                if(threshEnable) noiseValue = noiseValue >= threshVal ? 1.0 : 0.0;
-
-                const lutIndex = Math.floor(noiseValue * 255);
-                const idx = (y * width + x) * 4;
-                data[idx] = gradientLUT[lutIndex * 4];
-                data[idx+1] = gradientLUT[lutIndex * 4 + 1];
-                data[idx+2] = gradientLUT[lutIndex * 4 + 2];
-                data[idx+3] = 255;
+    // Optimized Gradient System (Sorts ONCE before loop)
+    const sortedStops = [...state.gradientStops].sort((a, b) => a.pos - b.pos);
+    
+    function mapColorOptimized(t) {
+        if (t <= sortedStops[0].pos) return hexToRgb(sortedStops[0].color);
+        if (t >= sortedStops[sortedStops.length-1].pos) return hexToRgb(sortedStops[sortedStops.length-1].color);
+        for (let i = 0; i < sortedStops.length - 1; i++) {
+            if (t >= sortedStops[i].pos && t <= sortedStops[i+1].pos) {
+                const range = sortedStops[i+1].pos - sortedStops[i].pos;
+                const localT = (t - sortedStops[i].pos) / range;
+                const c1 = hexToRgb(sortedStops[i].color);
+                const c2 = hexToRgb(sortedStops[i+1].color);
+                return [
+                    Math.floor(c1[0] + localT * (c2[0] - c1[0])),
+                    Math.floor(c1[1] + localT * (c2[1] - c1[1])),
+                    Math.floor(c1[2] + localT * (c2[2] - c1[2]))
+                ];
             }
         }
-        ctx.putImageData(imgData, 0, 0);
-        
-        // Update 3D
-        threeView.updateTexture(state.canvas, parseFloat(state.inputs.bumpScale.value));
-        
-        loader.classList.remove('active');
-    }, 10);
+        return [0,0,0];
+    }
+
+    const gradientLUT = new Uint8ClampedArray(256 * 4);
+    for(let i=0; i<256; i++) {
+        const rgb = mapColorOptimized(i/255);
+        gradientLUT[i*4] = rgb[0]; gradientLUT[i*4+1] = rgb[1]; gradientLUT[i*4+2] = rgb[2]; gradientLUT[i*4+3] = 255;
+    }
+
+    const imgData = ctx.createImageData(width, height);
+    const data = imgData.data;
+
+    // Dynamically decide chunk size based on width. Keeps the event loop snappy.
+    const rowsPerChunk = Math.max(1, Math.floor(100000 / width)); 
+
+    for (let y = 0; y < height; y++) {
+        if (genId !== currentGenId) return; // Halt if new gen requested
+
+        for (let x = 0; x < width; x++) {
+            let nx = x; let ny = y;
+            if (turbStrength > 0) {
+                const tx = turbGen.perlin(x / turbScale, y / turbScale);
+                const ty = turbGen.perlin((x + 1000) / turbScale, (y + 1000) / turbScale);
+                nx += tx * turbStrength; ny += ty * turbStrength;
+            }
+
+            let amplitude = 1; let frequency = 1; let noiseValue = 0; let maxValue = 0;
+
+            for (let o = 0; o < octaves; o++) {
+                const sampleX = nx / scale * frequency;
+                const sampleY = ny / scale * frequency;
+                let n;
+                
+                if (noiseType === 'perlin') n = noiseGen.perlin(sampleX, sampleY);
+                else if (noiseType === 'value') n = noiseGen.value(sampleX, sampleY);
+                else n = noiseGen.worley(sampleX, sampleY, wType, isManhattan);
+
+                if (isRidged) { n = 1.0 - Math.abs(n); n = n * n; }
+                noiseValue += n * amplitude; maxValue += amplitude;
+                amplitude *= persistence; frequency *= lacunarity;
+            }
+
+            if (!isRidged && noiseType !== 'worley') noiseValue = (noiseValue / maxValue + 1) / 2;
+            else { noiseValue = noiseValue / maxValue; if(noiseType === 'worley' && wType === 'f2-f1') noiseValue += 0.5; }
+            
+            if (invert) noiseValue = 1.0 - noiseValue;
+            noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
+            noiseValue = Math.max(0, Math.min(1, noiseValue));
+            if(threshEnable) noiseValue = noiseValue >= threshVal ? 1.0 : 0.0;
+
+            const lutIndex = Math.floor(noiseValue * 255);
+            const idx = (y * width + x) * 4;
+            data[idx] = gradientLUT[lutIndex * 4];
+            data[idx+1] = gradientLUT[lutIndex * 4 + 1];
+            data[idx+2] = gradientLUT[lutIndex * 4 + 2];
+            data[idx+3] = 255;
+        }
+
+        // Asynchronous Yield to prevent browser freeze on high res
+        if (y % rowsPerChunk === 0 || y === height - 1) {
+            ctx.putImageData(imgData, 0, 0); // Progressive render hook
+            loaderText.innerText = `Generating... ${Math.round((y / height) * 100)}%`;
+            await new Promise(r => setTimeout(r, 0));
+        }
+    }
+
+    if (genId !== currentGenId) return;
+
+    ctx.putImageData(imgData, 0, 0);
+    threeView.updateTexture(state.canvas);
+    loader.classList.remove('active');
 }
 
 // --- 6. GRADIENT LOGIC ---
 
-function mapColor(t) {
-    let stops = state.gradientStops.sort((a, b) => a.pos - b.pos);
-    if (t <= stops[0].pos) return hexToRgb(stops[0].color);
-    if (t >= stops[stops.length-1].pos) return hexToRgb(stops[stops.length-1].color);
-    for (let i = 0; i < stops.length - 1; i++) {
-        if (t >= stops[i].pos && t <= stops[i+1].pos) {
-            const range = stops[i+1].pos - stops[i].pos;
-            const localT = (t - stops[i].pos) / range;
-            const c1 = hexToRgb(stops[i].color);
-            const c2 = hexToRgb(stops[i+1].color);
-            return [Math.floor(lerp(c1[0], c2[0], localT)), Math.floor(lerp(c1[1], c2[1], localT)), Math.floor(lerp(c1[2], c2[2], localT))];
-        }
-    }
-    return [0,0,0];
-}
-
 function addGradientStop(pos, color) {
     state.gradientStops.push({ pos, color });
     renderGradientUI();
-    generateTexture();
+    debouncedGenerate();
 }
 
 function removeGradientStop(index) {
     if (state.gradientStops.length <= 2) return alert("Min 2 colors.");
     state.gradientStops.splice(index, 1);
     renderGradientUI();
-    generateTexture();
+    debouncedGenerate();
 }
 
 function renderGradientUI() {
@@ -960,60 +991,88 @@ function updateGradientPreview() {
 
 // --- 7. PRESETS & ACTIONS ---
 
-function randomize() {
-    if(state.uploadedImage) clearImageUpload(); // Clear image if user hits randomize
-    const r = Math.random;
-    state.inputs.seed.value = Math.floor(r() * 99999);
-    state.inputs.scale.value = 20 + r() * 150;
-    state.inputs.octaves.value = Math.floor(2 + r() * 6);
-    state.inputs.persistence.value = (0.3 + r() * 0.6).toFixed(2);
-    state.inputs.ridged.checked = r() > 0.7;
-    state.inputs.turbStrength.value = r() > 0.5 ? r() * 50 : 0;
-    state.gradientStops = [{ pos: 0, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') }, { pos: 1, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') }];
-    if(r() > 0.5) state.gradientStops.push({ pos: 0.5, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') });
-    Object.keys(state.inputs).forEach(id => { if(state.inputs[id].type === 'range') updateValueLabel(id, state.inputs[id].value); });
+function applyStateToUI(p) {
+    const d = {
+        noiseType: 'perlin', scale: 50, octaves: 4, persistence: 0.5, lacunarity: 2.0, ridged: false,
+        turbStrength: 0, turbScale: 50, contrast: 1.0, brightness: 0.0, invert: false,
+        worleyType: 'f1', worleyDist: 'euclidean', thresholdEnable: false, threshold: 0.5,
+        bumpScale: 0.2, matRoughness: 0.6, matMetalness: 0.1,
+        stops:[{pos:0, color:"#000000"}, {pos:1, color:"#ffffff"}]
+    };
+
+    Object.keys(d).forEach(k => {
+        const val = p[k] !== undefined ? p[k] : d[k];
+        const el = state.inputs[k];
+        if(!el) return;
+        
+        if (el.type === 'checkbox') el.checked = !!val;
+        else el.value = val;
+        
+        if (el.type === 'range') updateValueLabel(k, val);
+    });
+
+    state.gradientStops = JSON.parse(JSON.stringify(p.stops || d.stops));
     renderGradientUI();
+    threeView.updateMaterial();
     generateTexture();
 }
 
+function randomize() {
+    if(state.uploadedImage) clearImageUpload();
+    const r = Math.random;
+    
+    const randomState = {
+        seed: Math.floor(r() * 99999),
+        scale: Math.floor(20 + r() * 150),
+        octaves: Math.floor(2 + r() * 6),
+        persistence: (0.3 + r() * 0.6).toFixed(2),
+        ridged: r() > 0.7,
+        turbStrength: r() > 0.5 ? Math.floor(r() * 50) : 0,
+        bumpScale: (0.1 + r() * 0.8).toFixed(2),
+        matRoughness: r().toFixed(2),
+        matMetalness: (r() * 0.8).toFixed(2),
+        stops:[
+            { pos: 0, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') }, 
+            { pos: 1, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') }
+        ]
+    };
+    if(r() > 0.5) randomState.stops.push({ pos: 0.5, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') });
+    
+    state.inputs.seed.value = randomState.seed;
+    applyStateToUI(randomState);
+}
+
 const presets = {
-    stone: { noiseType: 'value', scale: 150, octaves: 8, persistence: 0.6, ridged: false, turbStrength: 0, contrast: 1.0, stops: [{pos:0, color:"#2c3e50"}, {pos:0.5, color:"#7f8c8d"}, {pos:1, color:"#bdc3c7"}] },
-    lava: { noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, ridged: true, turbStrength: 40, turbScale: 60, contrast: 1.5, brightness: -0.2, invert: true, stops: [{pos:0, color:"#000000"}, {pos:0.3, color:"#800000"}, {pos:0.6, color:"#ff4500"}, {pos:0.8, color:"#ffcc00"}, {pos:1, color:"#ffffaa"}] },
-    wood: { noiseType: 'value', scale: 15, octaves: 2, persistence: 0.7, turbStrength: 20, turbScale: 150, contrast: 1.1, stops: [{pos:0, color:"#5d4037"}, {pos:0.5, color:"#8d6e63"}, {pos:1, color:"#d7ccc8"}] },
-    water: { noiseType: 'perlin', scale: 100, octaves: 4, persistence: 0.4, ridged: true, turbStrength: 60, turbScale: 80, contrast: 1.0, invert: true, stops: [{pos:0, color:"#001f3f"}, {pos:0.4, color:"#0074d9"}, {pos:0.8, color:"#7fdbff"}, {pos:1, color:"#ffffff"}] },
-    clouds: { noiseType: 'perlin', scale: 80, octaves: 6, persistence: 0.5, ridged: false, turbStrength: 0, contrast: 1.2, brightness: 0.1, stops: [{pos:0, color:"#3498db"}, {pos:0.4, color:"#3498db"}, {pos:0.7, color:"#ffffff"}, {pos:1, color:"#ffffff"}] },
-    rust: { noiseType: 'perlin', scale: 40, octaves: 6, persistence: 0.7, ridged: false, turbStrength: 10, contrast: 1.3, stops: [{pos:0, color:"#3e2723"}, {pos:0.4, color:"#bf360c"}, {pos:0.7, color:"#d84315"}, {pos:1, color:"#ffccbc"}] },
-    cells: { noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean', scale: 40, octaves: 1, persistence: 0.5, contrast: 2.0, brightness: -0.3, invert: true, stops: [{pos:0, color:"#000000"}, {pos:0.1, color:"#2ecc71"}, {pos:0.9, color:"#27ae60"}, {pos:1, color:"#000000"}] },
-    ice: { noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan', scale: 70, octaves: 1, contrast: 1.5, invert: true, stops: [{pos:0, color:"#ffffff"}, {pos:0.4, color:"#aaddff"}, {pos:1, color:"#004488"}] }
+    stone: { noiseType: 'value', scale: 150, octaves: 8, persistence: 0.6, contrast: 1.0, matRoughness: 0.9, matMetalness: 0.0, stops:[{pos:0, color:"#2c3e50"}, {pos:0.5, color:"#7f8c8d"}, {pos:1, color:"#bdc3c7"}] },
+    lava: { noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, ridged: true, turbStrength: 40, turbScale: 60, contrast: 1.5, brightness: -0.2, invert: true, bumpScale: 0.8, matRoughness: 0.3, matMetalness: 0.1, stops:[{pos:0, color:"#000000"}, {pos:0.3, color:"#800000"}, {pos:0.6, color:"#ff4500"}, {pos:0.8, color:"#ffcc00"}, {pos:1, color:"#ffffaa"}] },
+    wood: { noiseType: 'value', scale: 15, octaves: 2, persistence: 0.7, turbStrength: 20, turbScale: 150, contrast: 1.1, matRoughness: 0.7, matMetalness: 0.0, stops:[{pos:0, color:"#5d4037"}, {pos:0.5, color:"#8d6e63"}, {pos:1, color:"#d7ccc8"}] },
+    water: { noiseType: 'perlin', scale: 100, octaves: 4, persistence: 0.4, ridged: true, turbStrength: 60, turbScale: 80, contrast: 1.0, invert: true, bumpScale: 0.1, matRoughness: 0.1, matMetalness: 0.3, stops:[{pos:0, color:"#001f3f"}, {pos:0.4, color:"#0074d9"}, {pos:0.8, color:"#7fdbff"}, {pos:1, color:"#ffffff"}] },
+    clouds: { noiseType: 'perlin', scale: 80, octaves: 6, persistence: 0.5, contrast: 1.2, brightness: 0.1, bumpScale: 0, matRoughness: 1.0, stops:[{pos:0, color:"#3498db"}, {pos:0.4, color:"#3498db"}, {pos:0.7, color:"#ffffff"}, {pos:1, color:"#ffffff"}] },
+    rust: { noiseType: 'perlin', scale: 40, octaves: 6, persistence: 0.7, turbStrength: 10, contrast: 1.3, matRoughness: 0.8, matMetalness: 0.6, bumpScale: 0.6, stops:[{pos:0, color:"#3e2723"}, {pos:0.4, color:"#bf360c"}, {pos:0.7, color:"#d84315"}, {pos:1, color:"#ffccbc"}] },
+    cells: { noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean', scale: 40, octaves: 1, persistence: 0.5, contrast: 2.0, brightness: -0.3, invert: true, matRoughness: 0.2, matMetalness: 0.4, stops:[{pos:0, color:"#000000"}, {pos:0.1, color:"#2ecc71"}, {pos:0.9, color:"#27ae60"}, {pos:1, color:"#000000"}] },
+    ice: { noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan', scale: 70, octaves: 1, contrast: 1.5, invert: true, bumpScale: 0.3, matRoughness: 0.1, matMetalness: 0.1, stops:[{pos:0, color:"#ffffff"}, {pos:0.4, color:"#aaddff"}, {pos:1, color:"#004488"}] }
 };
 
 function loadPreset(name) {
     if(state.uploadedImage) clearImageUpload();
     if(name === 'custom' || !presets[name]) return;
-    const p = presets[name];
-    state.inputs.noiseType.value = p.noiseType || 'perlin';
-    state.inputs.scale.value = p.scale;
-    state.inputs.octaves.value = p.octaves;
-    state.inputs.persistence.value = p.persistence;
-    state.inputs.ridged.checked = !!p.ridged;
-    state.inputs.turbStrength.value = p.turbStrength || 0;
-    if(p.turbScale) state.inputs.turbScale.value = p.turbScale;
-    state.inputs.contrast.value = p.contrast || 1;
-    state.inputs.brightness.value = p.brightness || 0;
-    state.inputs.invert.checked = !!p.invert;
-    if(p.worleyType) state.inputs.worleyType.value = p.worleyType;
-    if(p.worleyDist) state.inputs.worleyDist.value = p.worleyDist;
-    state.gradientStops = JSON.parse(JSON.stringify(p.stops));
-    Object.keys(state.inputs).forEach(id => { if(state.inputs[id].type === 'range') updateValueLabel(id, state.inputs[id].value); });
-    renderGradientUI();
-    generateTexture();
+    applyStateToUI(presets[name]);
 }
 
 function download() {
-    const link = document.createElement('a');
-    link.download = `texture_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
-    link.href = state.canvas.toDataURL();
-    link.click();
+    const btn = document.getElementById('downloadBtn');
+    const originalText = btn.innerText;
+    btn.innerText = "Processing...";
+    
+    // Blob output fixes browser crashing limit for Base64 Strings on 4K/8K images
+    state.canvas.toBlob((blob) => {
+        const link = document.createElement('a');
+        link.download = `tex_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(link.href);
+        btn.innerText = originalText;
+    }, 'image/png');
 }
 
 window.onload = init;
