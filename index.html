@@ -288,13 +288,15 @@
                         <option value="2560x1440">QHD (2K) - 2560x1440</option>
                         <option value="3840x2160">4K UHD - 3840x2160 (Heavy)</option>
                         <option value="7680x4320">8K UHD - 7680x4320 (Extreme)</option>
+                        <option value="11520x6480">12K UHD - 11520x6480 (Extreme)</option>
+                        <option value="15360x8640">16K UHD - 15360x8640 (Extreme)</option>
                         <option value="custom">Custom Dimensions</option>
                     </select>
 
                     <div class="row">
-                        <input type="number" id="texWidth" value="256" placeholder="W" min="1" max="8192">
+                        <input type="number" id="texWidth" value="256" placeholder="W" min="1" max="16384">
                         <span>x</span>
-                        <input type="number" id="texHeight" value="256" placeholder="H" min="1" max="8192">
+                        <input type="number" id="texHeight" value="256" placeholder="H" min="1" max="16384">
                     </div>
                     <div id="resWarning">⚠️ High Resolution selected. Please be patient.</div>
 
@@ -837,8 +839,8 @@ async function generateTexture() {
     // Yield immediately so UI can show the loader
     await new Promise(r => setTimeout(r, 10));
 
-    const width = Math.min(8192, Math.max(1, parseInt(state.inputs.texWidth.value) || 256));
-    const height = Math.min(8192, Math.max(1, parseInt(state.inputs.texHeight.value) || 256));
+    const width = Math.min(16384, Math.max(1, parseInt(state.inputs.texWidth.value) || 256));
+    const height = Math.min(16384, Math.max(1, parseInt(state.inputs.texHeight.value) || 256));
     state.canvas.width = width;
     state.canvas.height = height;
 
