@@ -641,12 +641,12 @@ class NoiseGenerator {
 
         const h000 = perm[h00 + iz0];
         const h100 = perm[h10 + iz0];
-        const h010 = perm[h01 + iz0];
-        const h110 = perm[h11 + iz0];
-        const h001 = perm[h00 + iz1];
-        const h101 = perm[h10 + iz1];
-        const h011 = perm[h01 + iz1];
-        const h111 = perm[h11 + iz1];
+        const h010 = perm[h010 + iz0];
+        const h110 = perm[h110 + iz0];
+        const h001 = perm[h001 + iz1];
+        const h101 = perm[h101 + iz1];
+        const h011 = perm[h011 + iz1];
+        const h111 = perm[h111 + iz1];
 
         const h0000 = perm[h000 + iw0];
         const h1000 = perm[h100 + iw0];
@@ -964,7 +964,7 @@ function probeMaxCanvasSize(targetW, targetH) {
     const testCanvas = document.createElement('canvas');
     testCanvas.width = targetW;
     testCanvas.height = targetH;
-    const ctx = testCanvas.getContext('2d');
+    const ctx = testCanvas.getContext('2d', { willReadFrequently: true });
     if (!ctx) return false;
     ctx.fillRect(0, 0, 1, 1);
     const probe = ctx.getImageData(0, 0, 1, 1);
@@ -1216,7 +1216,7 @@ let proxyCtx = null;
 
 function init() {
     state.canvas = document.getElementById('textureCanvas');
-    ctx = state.canvas.getContext('2d');
+    ctx = state.canvas.getContext('2d', { willReadFrequently: true });
     
     proxyCanvas = document.createElement('canvas');
     proxyCanvas.width = 512;
@@ -1226,7 +1226,7 @@ function init() {
     detectLimit();
     threeView = new ThreeController('threeContainer');
 
-    const ids =[
+    const ids = [
         'texWidth', 'texHeight', 'seed', 'noiseType', 'scale', 'octaves', 
         'persistence', 'lacunarity', 'ridged', 
         'turbStrength', 'turbScale', 'worleyType', 'worleyDist',
@@ -1429,7 +1429,7 @@ function generateNormalMap() {
 }
 
 
-// --- FIX 1: MULTI-THREADED WORKER SCHEDULER (WITH INLINED BLOB URLS) ---
+// --- 5. MULTI-THREADED WORKER SCHEDULER ---
 
 function generateTexture() {
     if (isRendering) {
@@ -1455,7 +1455,7 @@ function generateTexture() {
     try {
         state.canvas.width = w;
         state.canvas.height = h;
-        ctx = state.canvas.getContext('2d');
+        ctx = state.canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) throw new Error("Null Canvas context reference.");
     } catch (err) {
         loader.classList.remove('active');
@@ -1567,7 +1567,7 @@ function generateTexture() {
 }
 
 
-// --- 4. GRADIENT EDITOR AND INTERACTIVE CONFIGURATION ---
+// --- 6. GRADIENT EDITOR AND INTERACTIVE CONFIGURATION ---
 
 function addGradientStop(pos, color) {
     state.gradientStops.push({ pos, color });
@@ -1603,7 +1603,7 @@ function updateGradientPreview() {
     document.getElementById('gradient-preview').style.background = `linear-gradient(to right, ${css})`;
 }
 
-// --- 5. PRESETS AND ACTION CONTROLS ---
+// --- 7. PRESETS AND ACTION CONTROLS ---
 
 function applyStateToUI(p) {
     const d = {
@@ -1689,6 +1689,11 @@ function download() {
     btn.innerText = "Processing...";
     
     state.canvas.toBlob((blob) => {
+        if (!blob) {
+            alert("Export failed: Canvas is too large or system is out of memory to allocate the blob.");
+            btn.innerText = originalText;
+            return;
+        }
         const link = document.createElement('a');
         link.download = `diffuse_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
         link.href = URL.createObjectURL(blob);
@@ -1705,6 +1710,11 @@ function downloadNormal() {
     btn.innerText = "Processing...";
     
     state.normalCanvas.toBlob((blob) => {
+        if (!blob) {
+            alert("Export failed: Normal map canvas is too large or system is out of memory to allocate the blob.");
+            btn.innerText = originalText;
+            return;
+        }
         const link = document.createElement('a');
         link.download = `normal_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
         link.href = URL.createObjectURL(blob);
