@@ -477,8 +477,10 @@ class SeededRandom {
 const lerp = (a, b, t) => a + t * (b - a);
 const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
 const hexToRgb = (hex) => {
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] :[0, 0, 0];
+    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+    const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
+    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+    return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
 };
 
 // --- 2. NOISE GENERATOR CLASS ---
@@ -581,8 +583,16 @@ class ThreeController {
         this.scene.add(gridHelper);
 
         this.mesh = null;
+
+        // Initialize CanvasTexture once (Prevents re-allocation issues and memory churn)
+        this.currentTexture = new THREE.CanvasTexture(state.canvas);
+        this.currentTexture.wrapS = THREE.RepeatWrapping;
+        this.currentTexture.wrapT = THREE.RepeatWrapping;
+
         this.material = new THREE.MeshStandardMaterial({ 
             color: 0xffffff,
+            map: this.currentTexture,
+            bumpMap: this.currentTexture,
             roughness: 0.6,
             metalness: 0.1,
             side: THREE.DoubleSide
@@ -668,15 +678,10 @@ class ThreeController {
         this.material.needsUpdate = true;
     }
 
-    updateTexture(canvas) {
-        if(this.currentTexture) this.currentTexture.dispose();
-        
-        this.currentTexture = new THREE.CanvasTexture(canvas);
-        this.currentTexture.wrapS = THREE.RepeatWrapping;
-        this.currentTexture.wrapT = THREE.RepeatWrapping;
-        
-        this.material.map = this.currentTexture;
-        this.material.bumpMap = this.currentTexture;
+    updateTexture() {
+        if (this.currentTexture) {
+            this.currentTexture.needsUpdate = true;
+        }
         this.updateMaterial();
     }
 
@@ -692,15 +697,18 @@ class ThreeController {
 
 const state = {
     gradientStops:[{ pos: 0.0, color: "#000000" }, { pos: 1.0, color: "#ffffff" }],
-    canvas: document.getElementById('textureCanvas'),
+    canvas: null,
     inputs: {},
     uploadedImage: null
 };
-const ctx = state.canvas.getContext('2d', { willReadFrequently: true });
+let ctx = null;
 let threeView = null; 
 let currentGenId = 0; // ID Tracker for Async Generator
 
 function init() {
+    state.canvas = document.getElementById('textureCanvas');
+    // Disabled { willReadFrequently: true } context attributes to retain full GPU/WebGL upload speed
+    ctx = state.canvas.getContext('2d');
     threeView = new ThreeController('threeContainer');
 
     const ids =[
@@ -723,11 +731,11 @@ function init() {
             }
             if(el.type === 'range') updateValueLabel(id, e.target.value);
 
-            // Optimization: Change Material settings without redrawing 2D Canvas!
+            // Optimization: Update materials dynamically without triggering a complete redraw cycle
+            document.getElementById('presetSelect').value = 'custom';
             if (['matRoughness', 'matMetalness', 'bumpScale'].includes(id)) {
                 threeView.updateMaterial();
             } else {
-                document.getElementById('presetSelect').value = 'custom';
                 debouncedGenerate();
             }
         });
@@ -836,7 +844,7 @@ async function generateTexture() {
 
     if(state.uploadedImage) {
         ctx.drawImage(state.uploadedImage, 0, 0, width, height);
-        threeView.updateTexture(state.canvas);
+        if (threeView) threeView.updateTexture();
         loader.classList.remove('active');
         return; 
     }
@@ -870,7 +878,8 @@ async function generateTexture() {
         for (let i = 0; i < sortedStops.length - 1; i++) {
             if (t >= sortedStops[i].pos && t <= sortedStops[i+1].pos) {
                 const range = sortedStops[i+1].pos - sortedStops[i].pos;
-                const localT = (t - sortedStops[i].pos) / range;
+                // Protection against division by zero crashes if colors are stacked
+                const localT = range > 0.00001 ? (t - sortedStops[i].pos) / range : 0;
                 const c1 = hexToRgb(sortedStops[i].color);
                 const c2 = hexToRgb(sortedStops[i+1].color);
                 return [
@@ -922,15 +931,20 @@ async function generateTexture() {
                 amplitude *= persistence; frequency *= lacunarity;
             }
 
-            if (!isRidged && noiseType !== 'worley') noiseValue = (noiseValue / maxValue + 1) / 2;
-            else { noiseValue = noiseValue / maxValue; if(noiseType === 'worley' && wType === 'f2-f1') noiseValue += 0.5; }
+            // Normalization mapping for all modes to prevent Worley noise flat clipping
+            if (isRidged) {
+                noiseValue = noiseValue / maxValue;
+            } else {
+                noiseValue = (noiseValue / maxValue + 1) / 2;
+            }
             
             if (invert) noiseValue = 1.0 - noiseValue;
             noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
             noiseValue = Math.max(0, Math.min(1, noiseValue));
             if(threshEnable) noiseValue = noiseValue >= threshVal ? 1.0 : 0.0;
 
-            const lutIndex = Math.floor(noiseValue * 255);
+            // map values evenly using 256 color bins
+            const lutIndex = Math.min(255, Math.floor(noiseValue * 256));
             const idx = (y * width + x) * 4;
             data[idx] = gradientLUT[lutIndex * 4];
             data[idx+1] = gradientLUT[lutIndex * 4 + 1];
@@ -942,6 +956,7 @@ async function generateTexture() {
         if (y % rowsPerChunk === 0 || y === height - 1) {
             ctx.putImageData(imgData, 0, 0); // Progressive render hook
             loaderText.innerText = `Generating... ${Math.round((y / height) * 100)}%`;
+            if (threeView) threeView.updateTexture(); // Realtime 3D viewport update
             await new Promise(r => setTimeout(r, 0));
         }
     }
@@ -949,7 +964,7 @@ async function generateTexture() {
     if (genId !== currentGenId) return;
 
     ctx.putImageData(imgData, 0, 0);
-    threeView.updateTexture(state.canvas);
+    if (threeView) threeView.updateTexture();
     loader.classList.remove('active');
 }
 
@@ -1013,7 +1028,7 @@ function applyStateToUI(p) {
 
     state.gradientStops = JSON.parse(JSON.stringify(p.stops || d.stops));
     renderGradientUI();
-    threeView.updateMaterial();
+    if (threeView) threeView.updateMaterial();
     generateTexture();
 }
 
@@ -1021,13 +1036,23 @@ function randomize() {
     if(state.uploadedImage) clearImageUpload();
     const r = Math.random;
     
+    const noiseTypes = ['perlin', 'value', 'worley'];
+    const randomNoiseType = noiseTypes[Math.floor(r() * noiseTypes.length)];
+
     const randomState = {
         seed: Math.floor(r() * 99999),
+        noiseType: randomNoiseType,
         scale: Math.floor(20 + r() * 150),
         octaves: Math.floor(2 + r() * 6),
         persistence: (0.3 + r() * 0.6).toFixed(2),
         ridged: r() > 0.7,
+        lacunarity: (1.5 + r() * 2.0).toFixed(1),
         turbStrength: r() > 0.5 ? Math.floor(r() * 50) : 0,
+        contrast: (0.5 + r() * 2.0).toFixed(1),
+        brightness: (-0.3 + r() * 0.6).toFixed(2),
+        invert: r() > 0.8,
+        thresholdEnable: r() > 0.85,
+        threshold: r().toFixed(2),
         bumpScale: (0.1 + r() * 0.8).toFixed(2),
         matRoughness: r().toFixed(2),
         matMetalness: (r() * 0.8).toFixed(2),
@@ -1064,7 +1089,6 @@ function download() {
     const originalText = btn.innerText;
     btn.innerText = "Processing...";
     
-    // Blob output fixes browser crashing limit for Base64 Strings on 4K/8K images
     state.canvas.toBlob((blob) => {
         const link = document.createElement('a');
         link.download = `tex_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
