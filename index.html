@@ -1,4 +1,13 @@
 <!DOCTYPE html>
+<!-- 
+  KNOWN LIMITATIONS FOR Extreme 12K & 16K RESOLUTIONS:
+  1. Thread Crash Risks: Allocating massive 16K image arrays can exceed browser system heap limits 
+     on devices with limited RAM. It is suggested to run closed-tab states when iterating.
+  2. Canvas Limits: WebGL 3D preview is restricted to proxy texture buffers because most GPUs restrict 
+     the maximum texture dimension limit to 8K or 16K. 
+  3. browser Freeze on Save: Calling toDataURL() on extremely large canvases can block the 
+     rendering process during export. Using custom high-memory system configurations is advised.
+-->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -226,7 +235,7 @@
         .btn-generate:hover { background-color: #2980b9; }
         .btn-small { padding: 5px 10px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
 
-        /* Loader */
+        /* Loader & Progress styling */
         #loader {
             position: absolute; top:0; left:0; width:100%; height:100%;
             background: rgba(0,0,0,0.85); color: white;
@@ -237,9 +246,26 @@
         #loader.active { opacity: 1; pointer-events: all; }
         #loader span { font-size: 0.8rem; font-weight: normal; margin-top: 5px; color: #aaa; }
         
+        #progressBarContainer {
+            width: 80%;
+            background: #444;
+            height: 8px;
+            border-radius: 4px;
+            margin: 15px 0 5px 0;
+            overflow: hidden;
+        }
+        #progressBar {
+            height: 100%;
+            width: 0%;
+            background: var(--primary);
+            transition: width 0.1s ease;
+        }
+
         /* Status Banner */
         #uploadStatus { font-size: 0.8em; color: #2ecc71; display: none; margin-bottom: 10px; }
         #resWarning { color: #e74c3c; font-size: 0.75rem; display: none; margin-top: 5px; }
+        #hwWarningBanner { background: #c0392b; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin: 10px 0; display: none; text-align: left; line-height: 1.3;}
+        #canvasLimitInfo { font-size: 0.75rem; color: #888; margin-top: 5px;}
 
     </style>
 </head>
@@ -298,6 +324,8 @@
                         <span>x</span>
                         <input type="number" id="texHeight" value="256" placeholder="H" min="1" max="16384">
                     </div>
+                    <div id="canvasLimitInfo">Detecting device limit...</div>
+                    <div id="hwWarningBanner"></div>
                     <div id="resWarning">⚠️ High Resolution selected. Please be patient.</div>
 
                     <label style="margin-top:15px;">Seed (Randomness)</label>
@@ -402,7 +430,7 @@
             <details open>
                 <summary>Material & 3D Settings</summary>
                 <div class="control-group">
-                    <label>Bump Map Depth: <span class="val" id="bumpScaleVal">0.2</span></label>
+                    <label>Bump/Normal Depth: <span class="val" id="bumpScaleVal">0.2</span></label>
                     <input type="range" id="bumpScale" min="0" max="2" step="0.05" value="0.2">
 
                     <label>Material Roughness: <span class="val" id="matRoughnessVal">0.6</span></label>
@@ -410,6 +438,29 @@
 
                     <label>Material Metalness: <span class="val" id="matMetalnessVal">0.1</span></label>
                     <input type="range" id="matMetalness" min="0" max="1" step="0.05" value="0.1">
+                </div>
+            </details>
+
+            <!-- FIX 4 & FIX 3: Collapsible Advanced Collapsible Panel -->
+            <details>
+                <summary>Advanced / Pipeline Settings</summary>
+                <div class="control-group">
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="livePreviewToggle" checked>
+                        <label for="livePreviewToggle">Live Preview (Throttle mid-render uploads)</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="seamlessTilingCheckbox" checked>
+                        <label for="seamlessTilingCheckbox">Seamless Tiling (Toroidal 4D Mapping)</label>
+                    </div>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="showNormalMapCheckbox">
+                        <label for="showNormalMapCheckbox">Show Normal Map in 3D Preview</label>
+                    </div>
+                    <label>Normal Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
+                    <input type="range" id="normalStrength" min="0.5" max="10.0" step="0.1" value="3.0">
+                    
+                    <button class="action-btn btn-download" id="downloadNormalBtn" style="width: 100%;">Export Normal Map</button>
                 </div>
             </details>
 
@@ -425,7 +476,7 @@
             <!-- 3D Preview -->
             <div class="canvas-card">
                 <div class="card-header">
-                    <span class="card-title">3D Preview</span>
+                    <span class="card-title">3D Preview (Tiled 2x2)</span>
                     <select id="meshSelect" style="width: auto; margin:0; padding: 4px;">
                         <option value="block">Block (Cube)</option>
                         <option value="sphere">Ball (Sphere)</option>
@@ -441,7 +492,10 @@
                 <div id="threeContainer">
                     <div id="loader">
                         <div id="loaderText">Processing Texture...</div>
-                        <span>Large resolutions utilize async chunking to prevent freezes.</span>
+                        <div id="progressBarContainer">
+                            <div id="progressBar"></div>
+                        </div>
+                        <span>Generates in chunks via multi-threaded workers.</span>
                     </div>
                 </div>
             </div>
@@ -461,23 +515,11 @@
 <script>
 /**
  * ULTIMATE Texture Generator 3D - PRO EDITION
- * Fully optimized async generation and PBR implementation.
+ * Fully optimized multi-threaded rendering pipeline.
  */
 
-// --- 1. UTILITIES & MATH ---
+// --- 1. SEAMLESS COORDINATE AND UTILITIES PROBE ---
 
-class SeededRandom {
-    constructor(seed) { this.seed = seed; }
-    next() {
-        var t = this.seed += 0x6D2B79F5;
-        t = Math.imul(t ^ (t >>> 15), t | 1);
-        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    }
-}
-
-const lerp = (a, b, t) => a + t * (b - a);
-const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
 const hexToRgb = (hex) => {
     const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
     const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
@@ -485,69 +527,69 @@ const hexToRgb = (hex) => {
     return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
 };
 
-// --- 2. NOISE GENERATOR CLASS ---
+// FIX 5: Hardware Canvas Capability Probe
+function probeMaxCanvasSize(targetW, targetH) {
+  try {
+    const testCanvas = document.createElement('canvas');
+    testCanvas.width = targetW;
+    testCanvas.height = targetH;
+    const ctx = testCanvas.getContext('2d');
+    if (!ctx) return false;
+    ctx.fillRect(0, 0, 1, 1);
+    const probe = ctx.getImageData(0, 0, 1, 1);
+    return probe && probe.data.length === 4;
+  } catch (e) {
+    return false;
+  }
+}
 
-class NoiseGenerator {
-    constructor(seed) {
-        this.prng = new SeededRandom(seed);
-        this.p = new Uint8Array(512);
-        this.perm = new Uint8Array(512);
-        for(let i=0; i<256; i++) this.p[i] = i;
-        for(let i=0; i<256; i++) {
-            const r = Math.floor(this.prng.next() * 256);
-            [this.p[i], this.p[r]] = [this.p[r], this.p[i]];
+let detectedMax = 4096;
+function detectLimit() {
+    const sizes = [16384, 12288, 8192, 4096, 2048];
+    for (let size of sizes) {
+        if (probeMaxCanvasSize(size, size)) {
+            detectedMax = size;
+            break;
         }
-        for(let i=0; i<512; i++) this.perm[i] = this.p[i & 255];
     }
-    grad(hash, x, y) {
-        const h = hash & 15;
-        const u = h < 8 ? x : y;
-        const v = h < 4 ? y : (h === 12 || h === 14 ? x : 0);
-        return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
-    }
-    perlin(x, y) {
-        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
-        x -= Math.floor(x); y -= Math.floor(y);
-        const u = fade(x); const v = fade(y);
-        const A = this.perm[X]+Y, AA = this.perm[A], AB = this.perm[A+1];
-        const B = this.perm[X+1]+Y, BA = this.perm[B], BB = this.perm[B+1];
-        return lerp(lerp(this.grad(this.perm[AA], x, y), this.grad(this.perm[BA], x-1, y), u),
-                    lerp(this.grad(this.perm[AB], x, y-1), this.grad(this.perm[BB], x-1, y-1), u), v);
-    }
-    value(x, y) {
-        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
-        x -= Math.floor(x); y -= Math.floor(y);
-        const u = fade(x); const v = fade(y);
-        const n00 = this.perm[X + this.perm[Y]] / 255;
-        const n10 = this.perm[X + 1 + this.perm[Y]] / 255;
-        const n01 = this.perm[X + this.perm[Y + 1]] / 255;
-        const n11 = this.perm[X + 1 + this.perm[Y + 1]] / 255;
-        return (lerp(lerp(n00, n10, u), lerp(n01, n11, u), v) * 2) - 1;
-    }
-    worley(x, y, type, isManhattan) {
-        const xInt = Math.floor(x); const yInt = Math.floor(y);
-        const xFrac = x - xInt; const yFrac = y - yInt;
-        let minDist = 100; let secondMinDist = 100;
-        for(let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for(let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
-                const neighborX = xInt + xNeighbor;
-                const neighborY = yInt + yNeighbor;
-                let hash = (Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.prng.seed) * 43758.5453);
-                hash = hash - Math.floor(hash); const pointX = xNeighbor + hash; 
-                hash = (Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.prng.seed) * 23421.6543);
-                hash = hash - Math.floor(hash); const pointY = yNeighbor + hash;
-                const diffX = pointX - xFrac; const diffY = pointY - yFrac;
-                let d = isManhattan ? Math.abs(diffX) + Math.abs(diffY) : Math.sqrt(diffX*diffX + diffY*diffY);
-                if (d < minDist) { secondMinDist = minDist; minDist = d; } else if (d < secondMinDist) { secondMinDist = d; }
-            }
+    document.getElementById('canvasLimitInfo').innerText = `Device canvas limit: ~${detectedMax}px`;
+}
+
+function checkResolutionSupport() {
+    const w = parseInt(document.getElementById('texWidth').value) || 256;
+    const h = parseInt(document.getElementById('texHeight').value) || 256;
+    const banner = document.getElementById('hwWarningBanner');
+    const genBtn = document.getElementById('generateBtn');
+    
+    const supported = probeMaxCanvasSize(w, h);
+    if (!supported) {
+        let suggestedFallback = "Square 4K (4096x4096)";
+        if (detectedMax >= 8192) {
+            suggestedFallback = "Square 8K (8192x8192)";
+        } else if (detectedMax < 4096) {
+            suggestedFallback = "Square 2K (2048x2048)";
         }
-        if(type === 'f1') return (minDist * 2) - 1;
-        if(type === 'f2') return (secondMinDist * 2) - 1;
-        return ((secondMinDist - minDist) * 4) - 1;
+        
+        banner.innerHTML = `⚠️ Your browser or GPU does not support [${w}x${h}] canvas allocation. Maximum stable resolution on this device is approximately [${detectedMax}px]. Consider selecting ${suggestedFallback} for reliable output.`;
+        banner.style.display = 'block';
+        
+        genBtn.disabled = true;
+        genBtn.innerText = "Resolution Unsupported";
+        genBtn.style.backgroundColor = "#555";
+        genBtn.style.cursor = "not-allowed";
+        return false;
+    } else {
+        banner.style.display = 'none';
+        genBtn.disabled = false;
+        genBtn.innerText = "Force Render";
+        genBtn.style.backgroundColor = "";
+        genBtn.style.cursor = "";
+        return true;
     }
 }
 
-// --- 3. THREE.JS VIEWPORT CONTROLLER ---
+
+// --- 2. THREE.JS VIEWPORT CONTROLLER ---
 
 class ThreeController {
     constructor(containerId) {
@@ -555,22 +597,18 @@ class ThreeController {
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x1a1a1a);
         
-        // Camera
         this.camera = new THREE.PerspectiveCamera(45, this.container.clientWidth / this.container.clientHeight, 0.1, 1000);
         this.camera.position.set(2, 1.5, 2);
         
-        // Renderer
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
         this.renderer.shadowMap.enabled = true;
         this.container.appendChild(this.renderer.domElement);
         
-        // Controls
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
 
-        // Enhanced Lighting for PBR reflection visualization
         const ambient = new THREE.AmbientLight(0xffffff, 0.3);
         const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
         dirLight.position.set(5, 10, 7);
@@ -580,21 +618,21 @@ class ThreeController {
         fillLight.position.set(5, 0, -5);
         this.scene.add(ambient, dirLight, backLight, fillLight);
 
-        // Grid
         const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
         this.scene.add(gridHelper);
 
         this.mesh = null;
 
-        // Initialize CanvasTexture once (Prevents re-allocation issues and memory churn)
+        // FIX 3: Tile repeating set to 2x2
         this.currentTexture = new THREE.CanvasTexture(state.canvas);
         this.currentTexture.wrapS = THREE.RepeatWrapping;
         this.currentTexture.wrapT = THREE.RepeatWrapping;
+        this.currentTexture.repeat.set(2, 2);
 
         this.material = new THREE.MeshStandardMaterial({ 
             color: 0xffffff,
             map: this.currentTexture,
-            bumpMap: this.currentTexture,
+            normalMap: null,
             roughness: 0.6,
             metalness: 0.1,
             side: THREE.DoubleSide
@@ -613,8 +651,6 @@ class ThreeController {
 
     initGeometries() {
         this.geometries = {};
-
-        // Higher segment counts for smoother bumps
         this.geometries.block = new THREE.BoxGeometry(1, 1, 1, 16, 16, 16);
         this.geometries.sphere = new THREE.SphereGeometry(0.6, 64, 64);
         this.geometries.cylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 64, 16);
@@ -623,7 +659,7 @@ class ThreeController {
         this.geometries.cone = new THREE.ConeGeometry(0.5, 1, 64);
         this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.6, 16);
 
-        // Wedges remain manual mapping
+        // Buffer geometry configurations for wedges
         const wedgeGeo = new THREE.BufferGeometry();
         const wedgeVertices = new Float32Array([
             -0.5, -0.5, 0.5,   0.5, -0.5, 0.5,  -0.5, -0.5, -0.5, 
@@ -676,13 +712,42 @@ class ThreeController {
         if(!this.material) return;
         this.material.roughness = parseFloat(document.getElementById('matRoughness').value);
         this.material.metalness = parseFloat(document.getElementById('matMetalness').value);
-        this.material.bumpScale = parseFloat(document.getElementById('bumpScale').value);
+        
+        // Map the original bump value dynamically to normal scale to preserve depth control cohesively
+        const normScale = parseFloat(document.getElementById('bumpScale').value);
+        if (this.material.normalScale) {
+            this.material.normalScale.set(normScale, normScale);
+        }
         this.material.needsUpdate = true;
     }
 
-    updateTexture() {
-        if (this.currentTexture) {
+    // FIX 2: Throttled rendering pathway using Proxy or Full Canvas
+    updateTexture(finalCanvas) {
+        if (finalCanvas) {
+            const showNormal = document.getElementById('showNormalMapCheckbox').checked;
+            this.currentTexture.image = showNormal ? state.normalCanvas : state.canvas;
             this.currentTexture.needsUpdate = true;
+            
+            // Map the Sobel normal map into WebGL normalMap slot
+            if (state.normalCanvas) {
+                if (!this.normalTexture) {
+                    this.normalTexture = new THREE.CanvasTexture(state.normalCanvas);
+                    this.normalTexture.wrapS = THREE.RepeatWrapping;
+                    this.normalTexture.wrapT = THREE.RepeatWrapping;
+                    this.normalTexture.repeat.set(2, 2);
+                } else {
+                    this.normalTexture.image = state.normalCanvas;
+                    this.normalTexture.needsUpdate = true;
+                }
+                this.material.normalMap = this.normalTexture;
+            } else {
+                this.material.normalMap = null;
+            }
+        } else {
+            // Mid-render low-resolution upload loop to avoid pipeline stalls
+            this.currentTexture.image = proxyCanvas;
+            this.currentTexture.needsUpdate = true;
+            this.material.normalMap = null; // Disable heavy maps mid-render
         }
         this.updateMaterial();
     }
@@ -695,22 +760,36 @@ class ThreeController {
     }
 }
 
-// --- 4. APP STATE & LOGIC ---
+// --- 3. APP STATE & INITIALIZATION ---
 
 const state = {
     gradientStops:[{ pos: 0.0, color: "#000000" }, { pos: 1.0, color: "#ffffff" }],
     canvas: null,
+    normalCanvas: null,
     inputs: {},
     uploadedImage: null
 };
+
 let ctx = null;
 let threeView = null; 
-let currentGenId = 0; // ID Tracker for Async Generator
+let isRendering = false; // FIX 2 flag
+let activeWorkers = []; // FIX 1 worker tracking
+
+// Offscreen low resolution proxy to avoid WebGL context block during active generation
+let proxyCanvas = null;
+let proxyCtx = null;
 
 function init() {
     state.canvas = document.getElementById('textureCanvas');
-    // Disabled { willReadFrequently: true } context attributes to retain full GPU/WebGL upload speed
     ctx = state.canvas.getContext('2d');
+    
+    // Setup proxy canvas elements
+    proxyCanvas = document.createElement('canvas');
+    proxyCanvas.width = 512;
+    proxyCanvas.height = 512;
+    proxyCtx = proxyCanvas.getContext('2d');
+    
+    detectLimit();
     threeView = new ThreeController('threeContainer');
 
     const ids =[
@@ -718,7 +797,8 @@ function init() {
         'persistence', 'lacunarity', 'ridged', 
         'turbStrength', 'turbScale', 'worleyType', 'worleyDist',
         'contrast', 'brightness', 'invert', 'thresholdEnable', 'threshold',
-        'bumpScale', 'matRoughness', 'matMetalness'
+        'bumpScale', 'matRoughness', 'matMetalness',
+        'normalStrength'
     ];
     
     ids.forEach(id => {
@@ -729,14 +809,19 @@ function init() {
         el.addEventListener('input', (e) => {
             if(id === 'texWidth' || id === 'texHeight') {
                 document.getElementById('resPreset').value = 'custom';
-                checkResWarning();
+                checkResolutionSupport();
             }
             if(el.type === 'range') updateValueLabel(id, e.target.value);
 
-            // Optimization: Update materials dynamically without triggering a complete redraw cycle
             document.getElementById('presetSelect').value = 'custom';
             if (['matRoughness', 'matMetalness', 'bumpScale'].includes(id)) {
                 threeView.updateMaterial();
+            } else if (id === 'normalStrength') {
+                // If only changing normal strength, execute fast local Sobel filter to save computing
+                if (!isRendering) {
+                    generateNormalMap();
+                    threeView.updateTexture(state.canvas);
+                }
             } else {
                 debouncedGenerate();
             }
@@ -750,7 +835,7 @@ function init() {
             const[w, h] = val.split('x').map(Number);
             document.getElementById('texWidth').value = w;
             document.getElementById('texHeight').value = h;
-            checkResWarning();
+            checkResolutionSupport();
             generateTexture();
         }
     });
@@ -761,34 +846,32 @@ function init() {
     document.getElementById('generateBtn').addEventListener('click', generateTexture);
     document.getElementById('randomBtn').addEventListener('click', randomize);
     document.getElementById('downloadBtn').addEventListener('click', download);
+    document.getElementById('downloadNormalBtn').addEventListener('click', downloadNormal);
+    
     document.getElementById('newSeedBtn').addEventListener('click', () => {
         state.inputs.seed.value = Math.floor(Math.random() * 99999);
         generateTexture();
     });
-    document.getElementById('addStopBtn').addEventListener('click', () => addGradientStop(0.5, "#808080"));
     
+    document.getElementById('addStopBtn').addEventListener('click', () => addGradientStop(0.5, "#808080"));
     document.getElementById('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
     
     document.getElementById('meshSelect').addEventListener('change', (e) => {
         threeView.setMesh(e.target.value);
     });
+    
+    document.getElementById('showNormalMapCheckbox').addEventListener('change', () => {
+        if (!isRendering) {
+            threeView.updateTexture(state.canvas);
+        }
+    });
 
     renderGradientUI();
+    checkResolutionSupport();
     generateTexture();
 }
 
-// --- Helper Functions ---
-
-function checkResWarning() {
-    const w = parseInt(state.inputs.texWidth.value);
-    const h = parseInt(state.inputs.texHeight.value);
-    const warning = document.getElementById('resWarning');
-    if(w * h > 3840 * 2160) {
-        warning.style.display = 'block';
-    } else {
-        warning.style.display = 'none';
-    }
-}
+// --- helper Functions ---
 
 function handleImageUpload(e) {
     const file = e.target.files[0];
@@ -822,155 +905,240 @@ function updateValueLabel(id, val) {
 let debounceTimer;
 function debouncedGenerate() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(generateTexture, 50);
+    debounceTimer = setTimeout(generateTexture, 150);
 }
 
-// --- 5. ASYNC TEXTURE GENERATION CORE ---
 
-async function generateTexture() {
-    currentGenId++;
-    const genId = currentGenId; // Freeze the ID for this specific thread loop
+// --- FIX 4: REAL NORMAL MAP SOBEL FILTER PASS ---
+
+function generateNormalMap() {
+    const w = state.canvas.width;
+    const h = state.canvas.height;
+    
+    const normalCanvas = state.normalCanvas || document.createElement('canvas');
+    normalCanvas.width = w;
+    normalCanvas.height = h;
+    const normalCtx = normalCanvas.getContext('2d');
+    
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const src = imgData.data;
+    const normalImgData = normalCtx.createImageData(w, h);
+    const dst = normalImgData.data;
+    
+    const strength = parseFloat(document.getElementById('normalStrength').value || 3.0);
+    
+    const getLuminance = (x, y) => {
+        // Clamp boundary coordinates to handle edge padding
+        const cx = Math.max(0, Math.min(w - 1, x));
+        const cy = Math.max(0, Math.min(h - 1, y));
+        const idx = (cy * w + cx) * 4;
+        return (0.299 * src[idx] + 0.587 * src[idx + 1] + 0.114 * src[idx + 2]) / 255.0;
+    };
+    
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+            const l00 = getLuminance(x - 1, y - 1);
+            const l10 = getLuminance(x,     y - 1);
+            const l20 = getLuminance(x + 1, y - 1);
+            
+            const l01 = getLuminance(x - 1, y);
+            const l21 = getLuminance(x + 1, y);
+            
+            const l02 = getLuminance(x - 1, y + 1);
+            const l12 = getLuminance(x,     y + 1);
+            const l22 = getLuminance(x + 1, y + 1);
+            
+            const dX = (
+                (-1 * l00) + (1 * l20) +
+                (-2 * l01) + (2 * l21) +
+                (-1 * l02) + (1 * l22)
+            );
+            
+            const dY = (
+                (-1 * l00) + (-2 * l10) + (-1 * l20) +
+                (1 * l02) + (2 * l12) + (1 * l22)
+            );
+            
+            const nx = -dX * strength;
+            const ny = -dY * strength;
+            const nz = 1.0;
+            
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            const nX_norm = nx / len;
+            const nY_norm = ny / len;
+            const nZ_norm = nz / len;
+            
+            // Map values from [-1, 1] range to RGB [0, 255]
+            const r = Math.floor((nX_norm + 1.0) / 2.0 * 255.0);
+            const g = Math.floor((nY_norm + 1.0) / 2.0 * 255.0);
+            const b = Math.floor((nZ_norm + 1.0) / 2.0 * 255.0);
+            
+            const idx = (y * w + x) * 4;
+            dst[idx]     = r;
+            dst[idx + 1] = g;
+            dst[idx + 2] = b;
+            dst[idx + 3] = 255;
+        }
+    }
+    
+    normalCtx.putImageData(normalImgData, 0, 0);
+    state.normalCanvas = normalCanvas;
+}
+
+
+// --- FIX 1: MULTI-THREADED WORKER SCHEDULER ---
+
+function generateTexture() {
+    if (isRendering) {
+        // Terminate active rendering threads to prevent dirty/race conditions
+        activeWorkers.forEach(w => w.terminate());
+        activeWorkers = [];
+    }
+
+    if (!checkResolutionSupport()) return;
+
+    isRendering = true;
 
     const loader = document.getElementById('loader');
     const loaderText = document.getElementById('loaderText');
+    const progressBar = document.getElementById('progressBar');
+    
     loader.classList.add('active');
-    loaderText.innerText = 'Starting Generator...';
+    loaderText.innerText = 'Initializing workers...';
+    progressBar.style.width = '0%';
 
-    // Yield immediately so UI can show the loader
-    await new Promise(r => setTimeout(r, 10));
+    const w = parseInt(document.getElementById('texWidth').value) || 256;
+    const h = parseInt(document.getElementById('texHeight').value) || 256;
 
-    const width = Math.min(16384, Math.max(1, parseInt(state.inputs.texWidth.value) || 256));
-    const height = Math.min(16384, Math.max(1, parseInt(state.inputs.texHeight.value) || 256));
-    state.canvas.width = width;
-    state.canvas.height = height;
+    // FIX 5: Canvas allocation wrapped in structured try/catch checks
+    let mainImageData;
+    try {
+        state.canvas.width = w;
+        state.canvas.height = h;
+        ctx = state.canvas.getContext('2d');
+        if (!ctx) throw new Error("Null Canvas context reference.");
+        mainImageData = ctx.createImageData(w, h);
+    } catch (err) {
+        loader.classList.remove('active');
+        isRendering = false;
+        alert(`Render failed: Canvas memory allocation boundary exceeded.\nPlease reduce target dimensions and try again.`);
+        return;
+    }
 
     if(state.uploadedImage) {
-        ctx.drawImage(state.uploadedImage, 0, 0, width, height);
-        if (threeView) threeView.updateTexture();
+        ctx.drawImage(state.uploadedImage, 0, 0, w, h);
+        generateNormalMap();
+        threeView.updateTexture(state.canvas);
         loader.classList.remove('active');
+        isRendering = false;
         return; 
     }
 
-    const seed = parseInt(state.inputs.seed.value);
-    const scale = parseInt(state.inputs.scale.value);
-    const octaves = parseInt(state.inputs.octaves.value);
-    const persistence = parseFloat(state.inputs.persistence.value);
-    const lacunarity = parseFloat(state.inputs.lacunarity.value);
-    const isRidged = state.inputs.ridged.checked;
-    const turbStrength = parseInt(state.inputs.turbStrength.value);
-    const turbScale = parseInt(state.inputs.turbScale.value);
-    const contrast = parseFloat(state.inputs.contrast.value);
-    const brightness = parseFloat(state.inputs.brightness.value);
-    const invert = state.inputs.invert.checked;
-    const threshEnable = state.inputs.thresholdEnable.checked;
-    const threshVal = parseFloat(state.inputs.threshold.value);
-    const noiseType = state.inputs.noiseType.value;
-    const wType = state.inputs.worleyType.value;
-    const isManhattan = state.inputs.worleyDist.value === 'manhattan';
+    const payload = {
+        seed: parseInt(document.getElementById('seed').value),
+        noiseType: document.getElementById('noiseType').value,
+        scale: parseInt(document.getElementById('scale').value),
+        octaves: parseInt(document.getElementById('octaves').value),
+        persistence: parseFloat(document.getElementById('persistence').value),
+        lacunarity: parseFloat(document.getElementById('lacunarity').value),
+        ridged: document.getElementById('ridged').checked,
+        turbStrength: parseInt(document.getElementById('turbStrength').value),
+        turbScale: parseInt(document.getElementById('turbScale').value),
+        worleyType: document.getElementById('worleyType').value,
+        worleyDist: document.getElementById('worleyDist').value,
+        contrast: parseFloat(document.getElementById('contrast').value),
+        brightness: parseFloat(document.getElementById('brightness').value),
+        invert: document.getElementById('invert').checked,
+        thresholdEnable: document.getElementById('thresholdEnable').checked,
+        threshold: parseFloat(document.getElementById('threshold').value),
+        seamless: document.getElementById('seamlessTilingCheckbox').checked,
+        gradientStops: state.gradientStops
+    };
 
-    const noiseGen = new NoiseGenerator(seed);
-    const turbGen = new NoiseGenerator(seed + 999);
+    // Calculate maximum safe hardware core distribution
+    let N = navigator.hardwareConcurrency || 4;
+    N = Math.max(2, Math.min(8, N));
 
-    // Optimized Gradient System (Sorts ONCE before loop)
-    const sortedStops = [...state.gradientStops].sort((a, b) => a.pos - b.pos);
-    
-    function mapColorOptimized(t) {
-        if (t <= sortedStops[0].pos) return hexToRgb(sortedStops[0].color);
-        if (t >= sortedStops[sortedStops.length-1].pos) return hexToRgb(sortedStops[sortedStops.length-1].color);
-        for (let i = 0; i < sortedStops.length - 1; i++) {
-            if (t >= sortedStops[i].pos && t <= sortedStops[i+1].pos) {
-                const range = sortedStops[i+1].pos - sortedStops[i].pos;
-                // Protection against division by zero crashes if colors are stacked
-                const localT = range > 0.00001 ? (t - sortedStops[i].pos) / range : 0;
-                const c1 = hexToRgb(sortedStops[i].color);
-                const c2 = hexToRgb(sortedStops[i+1].color);
-                return [
-                    Math.floor(c1[0] + localT * (c2[0] - c1[0])),
-                    Math.floor(c1[1] + localT * (c2[1] - c1[1])),
-                    Math.floor(c1[2] + localT * (c2[2] - c1[2]))
-                ];
+    const chunkHeight = Math.floor(h / N);
+    let completedChunks = 0;
+    const livePreview = document.getElementById('livePreviewToggle').checked;
+
+    for (let i = 0; i < N; i++) {
+        const startY = i * chunkHeight;
+        const endY = (i === N - 1) ? h : (i + 1) * chunkHeight;
+
+        let worker = new Worker('noiseWorker.js');
+        activeWorkers.push(worker);
+
+        worker.onmessage = function(e) {
+            if (e.data.type === 'CHUNK_COMPLETE') {
+                const chunkData = e.data.data;
+                const chunkStartY = e.data.startY;
+                const chunkEndY = e.data.endY;
+
+                // Write the completed worker buffer to the correct rows
+                const offset = chunkStartY * w * 4;
+                mainImageData.data.set(chunkData, offset);
+
+                completedChunks++;
+                const percentage = Math.round((completedChunks / N) * 100);
+                loaderText.innerText = `Rendering... ${percentage}%`;
+                progressBar.style.width = `${percentage}%`;
+
+                if (livePreview) {
+                    // Update intermediate canvas results for the visual progress feedback
+                    const tempImgData = ctx.createImageData(w, chunkEndY - chunkStartY);
+                    tempImgData.data.set(chunkData);
+                    ctx.putImageData(tempImgData, 0, chunkStartY);
+                    
+                    // Downscale to 512px proxy buffer to avoid mid-render GPU upload stalls
+                    proxyCtx.drawImage(state.canvas, 0, 0, 512, 512);
+                    threeView.updateTexture();
+                }
+
+                if (completedChunks === N) {
+                    // Finalize rendering job
+                    isRendering = false;
+                    ctx.putImageData(mainImageData, 0, 0);
+                    
+                    generateNormalMap();
+                    
+                    // Cleanup active rendering threads
+                    activeWorkers.forEach(w => w.terminate());
+                    activeWorkers = [];
+                    
+                    loader.classList.remove('active');
+                    
+                    // Flush final unthrottled high resolution texture data to GPU
+                    requestAnimationFrame(() => {
+                        threeView.updateTexture(state.canvas);
+                    });
+                }
             }
-        }
-        return [0,0,0];
+        };
+
+        worker.onerror = function(err) {
+            console.error("Worker Thread Error:", err);
+            loader.classList.remove('active');
+            isRendering = false;
+            activeWorkers.forEach(w => w.terminate());
+            activeWorkers = [];
+        };
+
+        // Dispatch job parameters to worker thread
+        worker.postMessage({
+            type: "RENDER_CHUNK",
+            startY: startY,
+            endY: endY,
+            width: w,
+            height: h,
+            ...payload
+        });
     }
-
-    const gradientLUT = new Uint8ClampedArray(256 * 4);
-    for(let i=0; i<256; i++) {
-        const rgb = mapColorOptimized(i/255);
-        gradientLUT[i*4] = rgb[0]; gradientLUT[i*4+1] = rgb[1]; gradientLUT[i*4+2] = rgb[2]; gradientLUT[i*4+3] = 255;
-    }
-
-    const imgData = ctx.createImageData(width, height);
-    const data = imgData.data;
-
-    // Dynamically decide chunk size based on width. Keeps the event loop snappy.
-    const rowsPerChunk = Math.max(1, Math.floor(100000 / width)); 
-
-    for (let y = 0; y < height; y++) {
-        if (genId !== currentGenId) return; // Halt if new gen requested
-
-        for (let x = 0; x < width; x++) {
-            let nx = x; let ny = y;
-            if (turbStrength > 0) {
-                const tx = turbGen.perlin(x / turbScale, y / turbScale);
-                const ty = turbGen.perlin((x + 1000) / turbScale, (y + 1000) / turbScale);
-                nx += tx * turbStrength; ny += ty * turbStrength;
-            }
-
-            let amplitude = 1; let frequency = 1; let noiseValue = 0; let maxValue = 0;
-
-            for (let o = 0; o < octaves; o++) {
-                const sampleX = nx / scale * frequency;
-                const sampleY = ny / scale * frequency;
-                let n;
-                
-                if (noiseType === 'perlin') n = noiseGen.perlin(sampleX, sampleY);
-                else if (noiseType === 'value') n = noiseGen.value(sampleX, sampleY);
-                else n = noiseGen.worley(sampleX, sampleY, wType, isManhattan);
-
-                if (isRidged) { n = 1.0 - Math.abs(n); n = n * n; }
-                noiseValue += n * amplitude; maxValue += amplitude;
-                amplitude *= persistence; frequency *= lacunarity;
-            }
-
-            // Normalization mapping for all modes to prevent Worley noise flat clipping
-            if (isRidged) {
-                noiseValue = noiseValue / maxValue;
-            } else {
-                noiseValue = (noiseValue / maxValue + 1) / 2;
-            }
-            
-            if (invert) noiseValue = 1.0 - noiseValue;
-            noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
-            noiseValue = Math.max(0, Math.min(1, noiseValue));
-            if(threshEnable) noiseValue = noiseValue >= threshVal ? 1.0 : 0.0;
-
-            // map values evenly using 256 color bins
-            const lutIndex = Math.min(255, Math.floor(noiseValue * 256));
-            const idx = (y * width + x) * 4;
-            data[idx] = gradientLUT[lutIndex * 4];
-            data[idx+1] = gradientLUT[lutIndex * 4 + 1];
-            data[idx+2] = gradientLUT[lutIndex * 4 + 2];
-            data[idx+3] = 255;
-        }
-
-        // Asynchronous Yield to prevent browser freeze on high res
-        if (y % rowsPerChunk === 0 || y === height - 1) {
-            ctx.putImageData(imgData, 0, 0); // Progressive render hook
-            loaderText.innerText = `Generating... ${Math.round((y / height) * 100)}%`;
-            if (threeView) threeView.updateTexture(); // Realtime 3D viewport update
-            await new Promise(r => setTimeout(r, 0));
-        }
-    }
-
-    if (genId !== currentGenId) return;
-
-    ctx.putImageData(imgData, 0, 0);
-    if (threeView) threeView.updateTexture();
-    loader.classList.remove('active');
 }
 
-// --- 6. GRADIENT LOGIC ---
+
+// --- 4. GRADIENT EDITOR AND INTERACTIVE CONFIGURATION ---
 
 function addGradientStop(pos, color) {
     state.gradientStops.push({ pos, color });
@@ -979,7 +1147,7 @@ function addGradientStop(pos, color) {
 }
 
 function removeGradientStop(index) {
-    if (state.gradientStops.length <= 2) return alert("Min 2 colors.");
+    if (state.gradientStops.length <= 2) return alert("A minimum of 2 color stops are required.");
     state.gradientStops.splice(index, 1);
     renderGradientUI();
     debouncedGenerate();
@@ -1006,14 +1174,14 @@ function updateGradientPreview() {
     document.getElementById('gradient-preview').style.background = `linear-gradient(to right, ${css})`;
 }
 
-// --- 7. PRESETS & ACTIONS ---
+// --- 5. PRESETS AND ACTION CONTROLS ---
 
 function applyStateToUI(p) {
     const d = {
         noiseType: 'perlin', scale: 50, octaves: 4, persistence: 0.5, lacunarity: 2.0, ridged: false,
         turbStrength: 0, turbScale: 50, contrast: 1.0, brightness: 0.0, invert: false,
         worleyType: 'f1', worleyDist: 'euclidean', thresholdEnable: false, threshold: 0.5,
-        bumpScale: 0.2, matRoughness: 0.6, matMetalness: 0.1,
+        bumpScale: 0.2, matRoughness: 0.6, matMetalness: 0.1, normalStrength: 3.0,
         stops:[{pos:0, color:"#000000"}, {pos:1, color:"#ffffff"}]
     };
 
@@ -1037,7 +1205,6 @@ function applyStateToUI(p) {
 function randomize() {
     if(state.uploadedImage) clearImageUpload();
     const r = Math.random;
-    
     const noiseTypes = ['perlin', 'value', 'worley'];
     const randomNoiseType = noiseTypes[Math.floor(r() * noiseTypes.length)];
 
@@ -1058,6 +1225,7 @@ function randomize() {
         bumpScale: (0.1 + r() * 0.8).toFixed(2),
         matRoughness: r().toFixed(2),
         matMetalness: (r() * 0.8).toFixed(2),
+        normalStrength: (1.0 + r() * 6.0).toFixed(1),
         stops:[
             { pos: 0, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') }, 
             { pos: 1, color: '#' + Math.floor(r()*16777215).toString(16).padStart(6,'0') }
@@ -1093,7 +1261,23 @@ function download() {
     
     state.canvas.toBlob((blob) => {
         const link = document.createElement('a');
-        link.download = `tex_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
+        link.download = `diffuse_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
+        link.href = URL.createObjectURL(blob);
+        link.click();
+        URL.revokeObjectURL(link.href);
+        btn.innerText = originalText;
+    }, 'image/png');
+}
+
+function downloadNormal() {
+    if (!state.normalCanvas) return alert("Render texture fully first before exporting normal data.");
+    const btn = document.getElementById('downloadNormalBtn');
+    const originalText = btn.innerText;
+    btn.innerText = "Processing...";
+    
+    state.normalCanvas.toBlob((blob) => {
+        const link = document.createElement('a');
+        link.download = `normal_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
         link.href = URL.createObjectURL(blob);
         link.click();
         URL.revokeObjectURL(link.href);
