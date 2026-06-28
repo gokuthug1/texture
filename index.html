@@ -754,9 +754,9 @@ self.onmessage = function(e) {
         const sortedStops = [...gradientStops].sort((a, b) => a.pos - b.pos);
         
         function hexToRgb(hex) {
-            const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
+            const shorthandRegex = /^#?([a-f\\d])([a-f\\d])([a-f\\d])$/i;
             const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
-            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
+            const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(fullHex);
             return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
         }
         
@@ -1615,6 +1615,8 @@ function applyStateToUI(p) {
         stops:[{pos:0, color:"#000000"}, {pos:1, color:"#ffffff"}]
     };
 
+    clearTimeout(debounceTimer);
+
     Object.keys(d).forEach(k => {
         const val = p[k] !== undefined ? p[k] : d[k];
         const el = state.inputs[k];
@@ -1668,19 +1670,74 @@ function randomize() {
 }
 
 const presets = {
-    stone: { noiseType: 'value', scale: 150, octaves: 8, persistence: 0.6, contrast: 1.0, matRoughness: 0.9, matMetalness: 0.0, stops:[{pos:0, color:"#2c3e50"}, {pos:0.5, color:"#7f8c8d"}, {pos:1, color:"#bdc3c7"}] },
-    lava: { noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, ridged: true, turbStrength: 40, turbScale: 60, contrast: 1.5, brightness: -0.2, invert: true, bumpScale: 0.8, matRoughness: 0.3, matMetalness: 0.1, stops:[{pos:0, color:"#000000"}, {pos:0.3, color:"#800000"}, {pos:0.6, color:"#ff4500"}, {pos:0.8, color:"#ffcc00"}, {pos:1, color:"#ffffaa"}] },
-    wood: { noiseType: 'value', scale: 15, octaves: 2, persistence: 0.7, turbStrength: 20, turbScale: 150, contrast: 1.1, matRoughness: 0.7, matMetalness: 0.0, stops:[{pos:0, color:"#5d4037"}, {pos:0.5, color:"#8d6e63"}, {pos:1, color:"#d7ccc8"}] },
-    water: { noiseType: 'perlin', scale: 100, octaves: 4, persistence: 0.4, ridged: true, turbStrength: 60, turbScale: 80, contrast: 1.0, invert: true, bumpScale: 0.1, matRoughness: 0.1, matMetalness: 0.3, stops:[{pos:0, color:"#001f3f"}, {pos:0.4, color:"#0074d9"}, {pos:0.8, color:"#7fdbff"}, {pos:1, color:"#ffffff"}] },
-    clouds: { noiseType: 'perlin', scale: 80, octaves: 6, persistence: 0.5, contrast: 1.2, brightness: 0.1, bumpScale: 0, matRoughness: 1.0, stops:[{pos:0, color:"#3498db"}, {pos:0.4, color:"#3498db"}, {pos:0.7, color:"#ffffff"}, {pos:1, color:"#ffffff"}] },
-    rust: { noiseType: 'perlin', scale: 40, octaves: 6, persistence: 0.7, turbStrength: 10, contrast: 1.3, matRoughness: 0.8, matMetalness: 0.6, bumpScale: 0.6, stops:[{pos:0, color:"#3e2723"}, {pos:0.4, color:"#bf360c"}, {pos:0.7, color:"#d84315"}, {pos:1, color:"#ffccbc"}] },
-    cells: { noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean', scale: 40, octaves: 1, persistence: 0.5, contrast: 2.0, brightness: -0.3, invert: true, matRoughness: 0.2, matMetalness: 0.4, stops:[{pos:0, color:"#000000"}, {pos:0.1, color:"#2ecc71"}, {pos:0.9, color:"#27ae60"}, {pos:1, color:"#000000"}] },
-    ice: { noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan', scale: 70, octaves: 1, contrast: 1.5, invert: true, bumpScale: 0.3, matRoughness: 0.1, matMetalness: 0.1, stops:[{pos:0, color:"#ffffff"}, {pos:0.4, color:"#aaddff"}, {pos:1, color:"#004488"}] }
+    // Granite Stone: natural grey rocky surface
+    stone: {
+        noiseType: 'value', scale: 120, octaves: 8, persistence: 0.55, lacunarity: 2.0,
+        contrast: 1.3, brightness: 0.05,
+        matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.4,
+        stops: [{pos:0, color:"#4a4a4a"}, {pos:0.35, color:"#7c7c7c"}, {pos:0.65, color:"#a8a8a8"}, {pos:1, color:"#d4d4d4"}]
+    },
+    // Molten Lava: dark cracks with glowing orange-yellow veins
+    lava: {
+        noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, lacunarity: 2.0,
+        ridged: true, turbStrength: 30, turbScale: 60,
+        contrast: 1.8, brightness: 0.05, invert: false,
+        bumpScale: 0.8, matRoughness: 0.4, matMetalness: 0.1,
+        stops: [{pos:0, color:"#1a0500"}, {pos:0.25, color:"#7a1200"}, {pos:0.5, color:"#e03000"}, {pos:0.75, color:"#ff8c00"}, {pos:1, color:"#ffe066"}]
+    },
+    // Wood Grain: warm brown bands
+    wood: {
+        noiseType: 'value', scale: 12, octaves: 3, persistence: 0.65, lacunarity: 2.0,
+        turbStrength: 25, turbScale: 120,
+        contrast: 1.4, brightness: 0.05,
+        matRoughness: 0.7, matMetalness: 0.0, bumpScale: 0.25,
+        stops: [{pos:0, color:"#5c3317"}, {pos:0.3, color:"#8b5e3c"}, {pos:0.6, color:"#a0714f"}, {pos:1, color:"#c8a97e"}]
+    },
+    // Ocean Water: deep blue rolling waves
+    water: {
+        noiseType: 'perlin', scale: 90, octaves: 5, persistence: 0.45, lacunarity: 2.0,
+        ridged: true, turbStrength: 50, turbScale: 70,
+        contrast: 1.3, brightness: 0.1, invert: false,
+        bumpScale: 0.15, matRoughness: 0.05, matMetalness: 0.4,
+        stops: [{pos:0, color:"#003566"}, {pos:0.3, color:"#0077b6"}, {pos:0.65, color:"#48cae4"}, {pos:1, color:"#caf0f8"}]
+    },
+    // Sky Clouds: soft blue sky with white puffs
+    clouds: {
+        noiseType: 'perlin', scale: 80, octaves: 6, persistence: 0.5, lacunarity: 2.0,
+        contrast: 1.5, brightness: 0.15,
+        bumpScale: 0.05, matRoughness: 1.0, matMetalness: 0.0,
+        stops: [{pos:0, color:"#4a9fd4"}, {pos:0.45, color:"#87c4e8"}, {pos:0.65, color:"#daeef8"}, {pos:1, color:"#ffffff"}]
+    },
+    // Corroded Metal: orange-red rust patches
+    rust: {
+        noiseType: 'perlin', scale: 45, octaves: 6, persistence: 0.65, lacunarity: 2.0,
+        turbStrength: 12, turbScale: 60,
+        contrast: 1.5, brightness: 0.0,
+        matRoughness: 0.85, matMetalness: 0.55, bumpScale: 0.5,
+        stops: [{pos:0, color:"#5c2800"}, {pos:0.3, color:"#bf4a0c"}, {pos:0.6, color:"#e05c20"}, {pos:0.85, color:"#e8915a"}, {pos:1, color:"#f5d0b0"}]
+    },
+    // Alien Cells: green bioluminescent cell walls
+    cells: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 40, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        contrast: 2.5, brightness: 0.1, invert: false,
+        matRoughness: 0.2, matMetalness: 0.5, bumpScale: 0.4,
+        stops: [{pos:0, color:"#0a1a0a"}, {pos:0.25, color:"#0d5c2e"}, {pos:0.55, color:"#27ae60"}, {pos:0.8, color:"#58d68d"}, {pos:1, color:"#a9dfbf"}]
+    },
+    // Cracked Ice: white ice with deep blue cracks
+    ice: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan',
+        scale: 65, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        contrast: 2.0, brightness: 0.2, invert: false,
+        bumpScale: 0.35, matRoughness: 0.08, matMetalness: 0.15,
+        stops: [{pos:0, color:"#0a2a4a"}, {pos:0.3, color:"#1a6ea8"}, {pos:0.6, color:"#a8d8f0"}, {pos:1, color:"#f0f8ff"}]
+    }
 };
 
 function loadPreset(name) {
     if(state.uploadedImage) clearImageUpload();
     if(name === 'custom' || !presets[name]) return;
+    clearTimeout(debounceTimer);
     applyStateToUI(presets[name]);
 }
 
