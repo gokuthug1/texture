@@ -33,6 +33,7 @@ const grad4 = [
 
 class NoiseGenerator {
     constructor(seed) {
+        this.seed = seed;
         this.prng = new SeededRandom(seed);
         this.p = new Uint8Array(512);
         this.perm = new Uint8Array(512);
@@ -80,9 +81,9 @@ class NoiseGenerator {
             for(let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
                 const neighborX = xInt + xNeighbor;
                 const neighborY = yInt + yNeighbor;
-                let hash = (Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.prng.seed) * 43758.5453);
+                let hash = (Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.seed) * 43758.5453);
                 hash = hash - Math.floor(hash); const pointX = xNeighbor + hash; 
-                hash = (Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.prng.seed) * 23421.6543);
+                hash = (Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.seed) * 23421.6543);
                 hash = hash - Math.floor(hash); const pointY = yNeighbor + hash;
                 const diffX = pointX - xFrac; const diffY = pointY - yFrac;
                 let d = isManhattan ? Math.abs(diffX) + Math.abs(diffY) : Math.sqrt(diffX*diffX + diffY*diffY);
@@ -210,10 +211,10 @@ class NoiseGenerator {
                 const wrappedX = ((neighborX % periodX) + periodX) % periodX;
                 const wrappedY = ((neighborY % periodY) + periodY) % periodY;
                 
-                let hash = (Math.sin(wrappedX * 12.9898 + wrappedY * 78.233 + this.prng.seed) * 43758.5453);
+                let hash = (Math.sin(wrappedX * 12.9898 + wrappedY * 78.233 + this.seed) * 43758.5453);
                 hash = hash - Math.floor(hash); const pointX = xNeighbor + hash; 
                 
-                hash = (Math.sin(wrappedX * 98.233 + wrappedY * 12.9898 + this.prng.seed) * 23421.6543);
+                hash = (Math.sin(wrappedX * 98.233 + wrappedY * 12.9898 + this.seed) * 23421.6543);
                 hash = hash - Math.floor(hash); const pointY = yNeighbor + hash;
                 
                 const diffX = pointX - xFrac; const diffY = pointY - yFrac;
@@ -365,8 +366,8 @@ self.onmessage = function(e) {
                             frequency *= lacunarity;
                         }
                     } else {
-                        let periodX = Math.round(width / scale) * frequency;
-                        let periodY = Math.round(height / scale) * frequency;
+                        let periodX = Math.round(width / scale);
+                        let periodY = Math.round(height / scale);
                         periodX = Math.max(1, periodX);
                         periodY = Math.max(1, periodY);
                         
