@@ -1,34 +1,47 @@
 <!DOCTYPE html>
 <!-- 
   ULTIMATE TEXTURE GENERATOR 3D - PRO EDITION
-  - Infinite Color Stop Gradient Engine
-  - Real-Time 3D WebGL Multi-Mesh Viewport with Normal Mapping
-  - Multi-Threaded Web Worker Procedural Noise Generation
-  - 4D Toroidal Seamless Tiling Support
+  - Multi-Algorithm Procedural Noise: Perlin, Simplex, Value, Worley/Cellular
+  - Full PBR Map Suite: Diffuse/Albedo, Normal, Height/Displacement, Roughness, Ambient Occlusion
+  - 4D Toroidal Seamless Tiling Engine with Zero Seam Artifacts
+  - Multi-Threaded Native Web Worker Architecture with Zero-Dependency Fallback
+  - Real-Time WebGL 3D Viewport with Orbit Controls, 10 Geometries, PBR Lighting & Channel Inspection
+  - Infinite Multi-Stop Gradient Engine with 12 Curated Palettes & Direct-Click Sampling
+  - Preset Import/Export (JSON) & Custom Image Post-Processing with Seamless Edge Blending
 -->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ULTIMATE Texture Generator 3D - PRO</title>
-    <!-- Import Three.js -->
+    <!-- Three.js & OrbitControls with Safe Offline Detection -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <!-- Import OrbitControls -->
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     
     <style>
         :root {
             --primary: #3498db;
+            --primary-hover: #2980b9;
             --secondary: #2c3e50;
             --accent: #e67e22;
-            --bg: #1a1a1a;
-            --panel-bg: #2d2d2d;
+            --accent-hover: #d35400;
+            --success: #27ae60;
+            --danger: #c0392b;
+            --bg: #141414;
+            --panel-bg: #222222;
+            --panel-header: #2d2d2d;
+            --control-bg: #2b2b2b;
+            --input-bg: #383838;
+            --input-border: #4f4f4f;
             --text: #ecf0f1;
-            --input-bg: #404040;
+            --text-dim: #9aa0a6;
+            --border-radius: 8px;
         }
 
+        * { box-sizing: border-box; }
+
         body {
-            font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
             background-color: var(--bg);
             color: var(--text);
             margin: 0;
@@ -39,14 +52,25 @@
             min-height: 100vh;
         }
 
+        header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+
         h1 {
             color: var(--primary);
-            margin-bottom: 20px;
+            margin: 0 0 6px 0;
             font-weight: 800;
             text-transform: uppercase;
             letter-spacing: 2px;
-            text-align: center;
+            font-size: 1.8rem;
             text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-size: 0.85rem;
+            letter-spacing: 0.5px;
         }
 
         .main-container {
@@ -54,7 +78,7 @@
             flex-wrap: wrap;
             gap: 20px;
             width: 100%;
-            max-width: 1600px;
+            max-width: 1650px;
             justify-content: center;
             align-items: flex-start;
         }
@@ -62,15 +86,15 @@
         /* --- Controls Panel --- */
         .controls-panel {
             flex: 1;
-            min-width: 340px;
-            max-width: 460px;
+            min-width: 350px;
+            max-width: 480px;
             background: var(--panel-bg);
-            padding: 20px;
+            padding: 18px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
-            max-height: 90vh;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            max-height: 92vh;
             overflow-y: auto;
-            border: 1px solid #444;
+            border: 1px solid #383838;
         }
 
         .controls-panel::-webkit-scrollbar { width: 8px; }
@@ -79,14 +103,15 @@
 
         details {
             margin-bottom: 10px;
-            background: #363636;
-            border-radius: 8px;
+            background: var(--control-bg);
+            border-radius: var(--border-radius);
             overflow: hidden;
+            border: 1px solid #3c3c3c;
         }
 
         summary {
-            padding: 12px 15px;
-            background: #444;
+            padding: 11px 14px;
+            background: var(--panel-header);
             cursor: pointer;
             font-weight: 600;
             color: var(--text);
@@ -95,34 +120,36 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            font-size: 0.9rem;
         }
         
-        summary:hover { background: #505050; }
-        summary::after { content: '+'; font-weight: bold; color: var(--primary); }
-        details[open] summary::after { content: '-'; }
+        summary:hover { background: #383838; }
+        summary::after { content: '+'; font-weight: bold; color: var(--primary); font-size: 1.1rem; }
+        details[open] summary::after { content: '−'; }
 
-        .control-group { padding: 15px; border-top: 1px solid #555; }
+        .control-group { padding: 14px; border-top: 1px solid #3c3c3c; }
 
-        /* --- Inputs --- */
+        /* --- Labels & Form Inputs --- */
         label {
             display: flex;
             justify-content: space-between;
-            font-size: 0.85rem;
+            font-size: 0.82rem;
             font-weight: 600;
-            margin-bottom: 8px;
-            color: #aaa;
+            margin-bottom: 6px;
+            color: var(--text-dim);
         }
 
-        span.val { color: var(--primary); font-family: monospace; }
+        span.val { color: var(--primary); font-family: 'Consolas', monospace; font-size: 0.85rem; }
 
         input[type="range"] {
             width: 100%;
             height: 6px;
-            background: #555;
+            background: #4a4a4a;
             border-radius: 5px;
             outline: none;
             -webkit-appearance: none;
-            margin-bottom: 12px;
+            appearance: none;
+            margin: 4px 0 12px 0;
         }
 
         input[type="range"]::-webkit-slider-thumb {
@@ -133,41 +160,51 @@
             border-radius: 50%;
             cursor: pointer;
             transition: transform 0.1s;
+            border: 2px solid white;
         }
         input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
 
         select, input[type="number"], input[type="text"] {
             width: 100%;
-            padding: 8px;
+            padding: 8px 10px;
             background: var(--input-bg);
-            border: 1px solid #555;
+            border: 1px solid var(--input-border);
             color: white;
             border-radius: 6px;
             box-sizing: border-box;
             margin-bottom: 10px;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+        select:focus, input[type="number"]:focus, input[type="text"]:focus {
+            border-color: var(--primary);
         }
 
         input[type="file"] {
             width: 100%;
             background: var(--input-bg);
-            padding: 10px;
+            padding: 8px;
             border-radius: 6px;
             margin-bottom: 10px;
-            color: #aaa;
+            color: #bbb;
+            font-size: 0.8rem;
+            border: 1px dashed #555;
+            cursor: pointer;
         }
 
-        .row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
-        .checkbox-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; }
-        .checkbox-row label { margin: 0; cursor: pointer; color: var(--text); }
-        .checkbox-row input { width: auto; cursor: pointer; }
+        .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
+        .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+        .checkbox-row label { margin: 0; cursor: pointer; color: var(--text); font-size: 0.82rem; }
+        .checkbox-row input { width: auto; cursor: pointer; accent-color: var(--primary); }
 
-        /* --- Infinite Gradient Editor Styles --- */
+        /* --- Infinite Gradient Editor --- */
         #gradient-preview {
-            height: 30px;
+            height: 32px;
             width: 100%;
             border-radius: 6px;
             border: 2px solid #555;
-            margin-top: 5px;
+            margin-top: 4px;
             margin-bottom: 4px;
             cursor: crosshair;
             box-shadow: inset 0 0 6px rgba(0,0,0,0.6);
@@ -179,7 +216,7 @@
         .gradient-helper-text {
             font-size: 0.72rem;
             color: #888;
-            margin-bottom: 10px;
+            margin-bottom: 8px;
             display: block;
             text-align: center;
         }
@@ -188,7 +225,7 @@
             display: flex;
             gap: 6px;
             flex-wrap: wrap;
-            margin-bottom: 12px;
+            margin-bottom: 10px;
         }
         .gradient-btn-row button {
             flex: 1;
@@ -201,7 +238,7 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            max-height: 250px;
+            max-height: 220px;
             overflow-y: auto;
             padding-right: 4px;
             margin-bottom: 10px;
@@ -213,10 +250,10 @@
             display: flex;
             align-items: center;
             gap: 8px;
-            background: #3a3a3a;
+            background: #333333;
             padding: 5px 8px;
             border-radius: 6px;
-            border: 1px solid #4a4a4a;
+            border: 1px solid #444;
         }
         .gradient-stop-item input[type="color"] {
             border: none;
@@ -242,7 +279,7 @@
             flex-shrink: 0;
         }
         .remove-stop-btn {
-            background: #e74c3c;
+            background: var(--danger);
             color: white;
             border: none;
             width: 24px;
@@ -256,27 +293,29 @@
             flex-shrink: 0;
             transition: background 0.2s;
         }
-        .remove-stop-btn:hover:not(:disabled) { background: #c0392b; }
+        .remove-stop-btn:hover:not(:disabled) { background: #e74c3c; }
         .remove-stop-btn:disabled { background: #555; cursor: not-allowed; opacity: 0.4; }
 
-        /* --- Visualizers --- */
+        /* --- Visualizers Column --- */
         .visualizer-column {
             flex: 2;
             display: flex;
             flex-direction: column;
             gap: 20px;
-            min-width: 350px;
+            min-width: 360px;
+            max-width: 1050px;
         }
 
         .canvas-card {
             background: var(--panel-bg);
-            padding: 15px;
+            padding: 16px;
             border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
             display: flex;
             flex-direction: column;
             align-items: center;
-            border: 1px solid #444;
+            border: 1px solid #383838;
+            position: relative;
         }
         
         .card-header {
@@ -284,45 +323,98 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 10px;
-            border-bottom: 1px solid #444;
+            margin-bottom: 12px;
+            border-bottom: 1px solid #383838;
             padding-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 8px;
         }
         
-        .card-title { font-weight: bold; color: var(--text); }
+        .card-title {
+            font-weight: bold;
+            color: var(--text);
+            font-size: 0.95rem;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
 
         canvas#textureCanvas {
-            background-color: #eee;
-            image-rendering: pixelated;
+            background-color: #1a1a1a;
+            image-rendering: auto;
             max-width: 100%;
             height: auto;
-            border-radius: 4px;
-            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            border-radius: 6px;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+            border: 1px solid #444;
         }
 
         #threeContainer {
             width: 100%;
-            height: 400px;
-            background: #000;
-            border-radius: 4px;
+            height: 420px;
+            background: #111;
+            border-radius: 6px;
             overflow: hidden;
             position: relative;
+            border: 1px solid #444;
+        }
+
+        .viewport-badges {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            display: flex;
+            gap: 6px;
+            z-index: 5;
+            pointer-events: none;
+        }
+        .v-badge {
+            background: rgba(0,0,0,0.7);
+            color: #ddd;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-size: 0.72rem;
+            border: 1px solid #444;
         }
 
         /* --- Buttons --- */
         .action-buttons { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
         button.action-btn {
-            flex: 1; padding: 12px; border: none; border-radius: 6px;
+            flex: 1; padding: 11px; border: none; border-radius: 6px;
             font-weight: 600; cursor: pointer; transition: 0.2s;
             text-transform: uppercase; font-size: 0.8rem;
+            display: flex; align-items: center; justify-content: center; gap: 6px;
         }
         .btn-generate { background-color: var(--primary); color: white; }
+        .btn-generate:hover { background-color: var(--primary-hover); }
         .btn-random { background-color: var(--accent); color: white; }
+        .btn-random:hover { background-color: var(--accent-hover); }
         .btn-download { background-color: var(--secondary); color: white; }
-        .btn-clear { background-color: #c0392b; color: white; }
-        .btn-generate:hover { background-color: #2980b9; }
-        .btn-small { padding: 5px 10px; background: #27ae60; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 0.75rem; }
-        .btn-small:hover { filter: brightness(1.1); }
+        .btn-download:hover { background-color: #34495e; }
+        .btn-clear { background-color: var(--danger); color: white; }
+        .btn-clear:hover { background-color: #e74c3c; }
+        .btn-small {
+            padding: 5px 10px;
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.75rem;
+            font-weight: 600;
+            transition: filter 0.2s;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .btn-small:hover { filter: brightness(1.15); }
 
         /* Loader & Progress styling */
         #loader {
@@ -330,51 +422,108 @@
             background: rgba(0,0,0,0.85); color: white;
             display: flex; flex-direction: column; justify-content: center; align-items: center;
             z-index: 10; pointer-events: none; opacity: 0; transition: opacity 0.2s;
-            text-align: center; font-weight: bold; font-size: 1.2rem;
+            text-align: center; font-weight: bold; font-size: 1.1rem;
         }
         #loader.active { opacity: 1; pointer-events: all; }
-        #loader span { font-size: 0.8rem; font-weight: normal; margin-top: 5px; color: #aaa; }
+        #loader span { font-size: 0.78rem; font-weight: normal; margin-top: 6px; color: #aaa; }
         
         #progressBarContainer {
-            width: 80%;
-            background: #444;
+            width: 75%;
+            max-width: 320px;
+            background: #333;
             height: 8px;
             border-radius: 4px;
-            margin: 15px 0 5px 0;
+            margin: 14px 0 6px 0;
             overflow: hidden;
+            border: 1px solid #555;
         }
         #progressBar {
             height: 100%;
             width: 0%;
-            background: var(--primary);
+            background: linear-gradient(90deg, var(--primary), #2ecc71);
             transition: width 0.1s ease;
         }
 
         /* Status Banner */
-        #uploadStatus { font-size: 0.8em; color: #2ecc71; display: none; margin-bottom: 10px; }
-        #resWarning { color: #e74c3c; font-size: 0.75rem; display: none; margin-top: 5px; }
-        #hwWarningBanner { background: #c0392b; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin: 10px 0; display: none; text-align: left; line-height: 1.3;}
-        #canvasLimitInfo { font-size: 0.75rem; color: #888; margin-top: 5px;}
+        #uploadStatus { font-size: 0.8rem; color: #2ecc71; display: none; margin-bottom: 8px; }
+        #hwWarningBanner { background: #c0392b; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin: 10px 0; display: none; text-align: left; line-height: 1.3; }
+        #canvasLimitInfo { font-size: 0.72rem; color: #888; margin-top: 4px; }
+        #threeOfflineNotice {
+            display: none;
+            padding: 40px 20px;
+            text-align: center;
+            color: #ccc;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        /* Preset import / export row */
+        .preset-io-row {
+            display: flex;
+            gap: 6px;
+            margin-top: 8px;
+        }
+        .preset-io-row button {
+            flex: 1;
+            padding: 6px 8px;
+            font-size: 0.75rem;
+        }
+
+        /* Channel switcher pill buttons */
+        .channel-pills {
+            display: flex;
+            gap: 4px;
+            flex-wrap: wrap;
+        }
+        .channel-pill {
+            padding: 4px 8px;
+            font-size: 0.72rem;
+            background: #333;
+            border: 1px solid #444;
+            color: #bbb;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .channel-pill.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
 
-    <h1>Ultimate Texture Generator <span style="font-size:0.5em; color:#888;">PRO EDITION</span></h1>
+    <header>
+        <h1>Ultimate Texture Generator <span style="font-size:0.5em; color:var(--text-dim);">3D PRO</span></h1>
+        <div class="subtitle">Procedural PBR Material Engine • 4D Seamless Toroidal Noise • WebGL Viewport</div>
+    </header>
 
     <div class="main-container">
         <!-- Controls Side -->
         <div class="controls-panel">
             
+            <!-- Custom Image Upload & Seamless Blend -->
             <details>
                 <summary>Upload Custom Texture</summary>
                 <div class="control-group">
-                    <p style="font-size: 0.8rem; color:#aaa; margin-top:0;">Upload an image to override procedural generation. The image will also be used as a Bump/Normal map.</p>
+                    <p style="font-size: 0.78rem; color:#aaa; margin-top:0; line-height: 1.4;">
+                        Upload an image to process or generate normal, roughness, and height maps.
+                    </p>
                     <input type="file" id="imageInput" accept="image/*">
-                    <div id="uploadStatus">Custom Image Loaded Active</div>
-                    <button class="action-btn btn-clear" id="clearImageBtn" style="width:100%">Clear Image / Use Generator</button>
+                    <div id="uploadStatus">✓ Custom Image Loaded Active</div>
+                    
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="seamlessBlendUpload">
+                        <label for="seamlessBlendUpload">Make Image Seamless (Edge Mirror Blend)</label>
+                    </div>
+
+                    <button class="action-btn btn-clear" id="clearImageBtn" style="width:100%; margin-top:6px;">Clear Image / Use Procedural</button>
                 </div>
             </details>
 
+            <!-- Style Preset & Resolution -->
             <details open>
                 <summary>Generation & Resolution</summary>
                 <div class="control-group">
@@ -391,50 +540,59 @@
                         <option value="ice">Cracked Ice (6 Colors)</option>
                         <option value="cyberpunk">Cyberpunk Grid (5 Colors)</option>
                         <option value="gold">Gold & Bronze (5 Colors)</option>
+                        <option value="marble">White Veined Marble (5 Colors)</option>
+                        <option value="sand">Desert Sand Dunes (5 Colors)</option>
+                        <option value="plasma">Electric Plasma (5 Colors)</option>
+                        <option value="leather">Fine Leather (5 Colors)</option>
                     </select>
+
+                    <div class="preset-io-row">
+                        <button class="btn-small" style="background:#555;" id="exportPresetBtn">💾 Export Preset (JSON)</button>
+                        <button class="btn-small" style="background:#555;" id="importPresetBtn">📂 Import Preset</button>
+                        <input type="file" id="presetFileInput" accept=".json" style="display:none;">
+                    </div>
                     
-                    <label style="margin-top:15px;">Output Resolution</label>
+                    <label style="margin-top:14px;">Output Resolution</label>
                     <select id="resPreset">
-                        <option value="256x256" selected>Square 256x256 (Fast)</option>
-                        <option value="512x512">Square 512x512</option>
+                        <option value="256x256" selected>Square 256x256 (Fast Preview)</option>
+                        <option value="512x512">Square 512x512 (Standard)</option>
                         <option value="1024x1024">Square 1K (1024x1024)</option>
                         <option value="2048x2048">Square 2K (2048x2048)</option>
+                        <option value="4096x4096">Square 4K (4096x4096 UHD)</option>
                         <option value="1280x720">HD (720p) - 1280x720</option>
                         <option value="1920x1080">Full HD (1080p) - 1920x1080</option>
                         <option value="2560x1440">QHD (2K) - 2560x1440</option>
-                        <option value="3840x2160">4K UHD - 3840x2160 (Heavy)</option>
-                        <option value="7680x4320">8K UHD - 7680x4320 (Extreme)</option>
-                        <option value="11520x6480">12K UHD - 11520x6480 (Extreme)</option>
-                        <option value="15360x8640">16K UHD - 15360x8640 (Extreme)</option>
-                        <option value="32768x18432">32K UHD - 32768x18432 (Extreme RAM Hazard)</option>
+                        <option value="3840x2160">4K UHD - 3840x2160</option>
+                        <option value="8192x8192">Square 8K (8192x8192 Heavy)</option>
                         <option value="custom">Custom Dimensions</option>
                     </select>
 
                     <div class="row">
-                        <input type="number" id="texWidth" value="256" placeholder="W" min="1" max="32768">
-                        <span>x</span>
-                        <input type="number" id="texHeight" value="256" placeholder="H" min="1" max="32768">
+                        <input type="number" id="texWidth" value="256" placeholder="W" min="16" max="16384">
+                        <span style="color:#888;">×</span>
+                        <input type="number" id="texHeight" value="256" placeholder="H" min="16" max="16384">
                     </div>
-                    <div id="canvasLimitInfo">Detecting device limit...</div>
+                    <div id="canvasLimitInfo">Detecting hardware limits...</div>
                     <div id="hwWarningBanner"></div>
-                    <div id="resWarning">⚠️ High Resolution selected. Please be patient.</div>
 
-                    <label style="margin-top:15px;">Seed (Randomness)</label>
+                    <label style="margin-top:12px;">Seed (Randomness)</label>
                     <div class="row">
                         <input type="number" id="seed" value="12345">
-                        <button class="btn-small" style="background:var(--accent)" id="newSeedBtn">🎲</button>
+                        <button class="btn-small" style="background:var(--accent)" id="newSeedBtn" title="Randomize Seed">🎲</button>
                     </div>
                 </div>
             </details>
 
+            <!-- Base Noise Algorithm -->
             <details open>
-                <summary>Base Noise</summary>
+                <summary>Base Noise Algorithm</summary>
                 <div class="control-group">
                     <label>Algorithm</label>
                     <select id="noiseType">
-                        <option value="perlin">Perlin Noise (Natural)</option>
-                        <option value="value">Value Noise (Blocky)</option>
-                        <option value="worley">Worley (Cellular/Bubbles)</option>
+                        <option value="simplex">Simplex Noise (Smooth & Fast)</option>
+                        <option value="perlin" selected>Perlin Noise (Classic Natural)</option>
+                        <option value="value">Value Noise (Blocky Organic)</option>
+                        <option value="worley">Worley (Cellular / Bubbles / Voronoi)</option>
                     </select>
 
                     <label>Scale (Zoom): <span class="val" id="scaleVal">50</span></label>
@@ -451,7 +609,7 @@
 
                     <div class="checkbox-row">
                         <input type="checkbox" id="ridged">
-                        <label for="ridged">Ridged Mode (Sharp Peaks)</label>
+                        <label for="ridged">Ridged Mode (Sharp Peaks / Canyons)</label>
                     </div>
                 </div>
             </details>
@@ -473,11 +631,13 @@
                         <option value="gold">Golden Luxury (6 stops)</option>
                         <option value="toxic">Toxic Slime (5 stops)</option>
                         <option value="hologram">Holographic (6 stops)</option>
+                        <option value="marble">White Marble (5 stops)</option>
+                        <option value="sand">Desert Dune (5 stops)</option>
                     </select>
 
-                    <label>Gradient Preview <span style="font-size:0.75rem; color:#888;">(Click bar to add stop)</span></label>
-                    <div id="gradient-preview" title="Click anywhere on the bar to add a color stop"></div>
-                    <span class="gradient-helper-text">💡 Click directly on the bar to insert color stops at that position</span>
+                    <label>Gradient Preview <span style="font-size:0.72rem; color:#888;">(Click bar to add stop)</span></label>
+                    <div id="gradient-preview" title="Click anywhere on the bar to sample and add a color stop"></div>
+                    <span class="gradient-helper-text">💡 Click directly on the bar to sample & insert color stops</span>
 
                     <div class="gradient-btn-row">
                         <button class="btn-small" id="addStopBtn">+ Add Stop</button>
@@ -490,8 +650,9 @@
                 </div>
             </details>
 
+            <!-- Distortion (FBM Warp) -->
             <details>
-                <summary>Distortion (FBM)</summary>
+                <summary>Distortion (FBM Domain Warping)</summary>
                 <div class="control-group">
                     <label>Warp Strength: <span class="val" id="turbStrengthVal">0</span></label>
                     <input type="range" id="turbStrength" min="0" max="200" value="0">
@@ -501,24 +662,29 @@
                 </div>
             </details>
 
+            <!-- Worley / Cellular Settings -->
             <details>
-                <summary>Worley Settings</summary>
+                <summary>Worley / Cellular Settings</summary>
                 <div class="control-group">
                     <label>Calculation Function</label>
                     <select id="worleyType">
-                        <option value="f1">F1 (Closest Point)</option>
-                        <option value="f2">F2 (2nd Closest)</option>
-                        <option value="f2-f1">F2 - F1 (Cell Edges)</option>
+                        <option value="f1">F1 (Cell Centers / Closest Point)</option>
+                        <option value="f2">F2 (Secondary Boundary)</option>
+                        <option value="f2-f1">F2 − F1 (Voronoi Borders / Cell Walls)</option>
+                        <option value="f1+f2">F1 + F2 (Smooth Ridges)</option>
                     </select>
                     
                     <label>Distance Metric</label>
                     <select id="worleyDist">
-                        <option value="euclidean">Euclidean (Round)</option>
-                        <option value="manhattan">Manhattan (Diamond)</option>
+                        <option value="euclidean">Euclidean (Smooth / Organic)</option>
+                        <option value="manhattan">Manhattan (Diamond / Grid)</option>
+                        <option value="chebyshev">Chebyshev (Square / Architectural)</option>
+                        <option value="minkowski">Minkowski (Star Crystals)</option>
                     </select>
                 </div>
             </details>
 
+            <!-- Post Processing -->
             <details>
                 <summary>Post Processing</summary>
                 <div class="control-group">
@@ -530,12 +696,12 @@
 
                     <div class="checkbox-row">
                         <input type="checkbox" id="invert">
-                        <label for="invert">Invert Colors</label>
+                        <label for="invert">Invert Colors / Height</label>
                     </div>
                     
                     <div class="checkbox-row">
                         <input type="checkbox" id="thresholdEnable">
-                        <label for="thresholdEnable">Hard Threshold</label>
+                        <label for="thresholdEnable">Hard Threshold (Binarize)</label>
                     </div>
                     
                     <label>Threshold Level: <span class="val" id="thresholdVal">0.5</span></label>
@@ -543,85 +709,140 @@
                 </div>
             </details>
             
+            <!-- Material & 3D Lighting Settings -->
             <details open>
                 <summary>Material & 3D Settings</summary>
                 <div class="control-group">
-                    <label>Bump/Normal Depth: <span class="val" id="bumpScaleVal">0.2</span></label>
-                    <input type="range" id="bumpScale" min="0" max="2" step="0.05" value="0.2">
+                    <label>Normal/Bump Depth: <span class="val" id="bumpScaleVal">0.3</span></label>
+                    <input type="range" id="bumpScale" min="0" max="2" step="0.05" value="0.3">
+
+                    <label>Displacement Scale: <span class="val" id="displacementScaleVal">0.05</span></label>
+                    <input type="range" id="displacementScale" min="0" max="0.3" step="0.01" value="0.05">
 
                     <label>Material Roughness: <span class="val" id="matRoughnessVal">0.6</span></label>
                     <input type="range" id="matRoughness" min="0" max="1" step="0.05" value="0.6">
 
                     <label>Material Metalness: <span class="val" id="matMetalnessVal">0.1</span></label>
                     <input type="range" id="matMetalness" min="0" max="1" step="0.05" value="0.1">
+
+                    <label>Ambient Occlusion Intensity: <span class="val" id="aoIntensityVal">1.0</span></label>
+                    <input type="range" id="aoIntensity" min="0" max="2" step="0.1" value="1.0">
                 </div>
             </details>
 
-            <!-- Pipeline Settings -->
+            <!-- Advanced / Pipeline Settings -->
             <details>
                 <summary>Advanced / Pipeline Settings</summary>
                 <div class="control-group">
                     <div class="checkbox-row">
-                        <input type="checkbox" id="livePreviewToggle" checked>
-                        <label for="livePreviewToggle">Live Preview (Throttle mid-render uploads)</label>
-                    </div>
-                    <div class="checkbox-row">
                         <input type="checkbox" id="seamlessTilingCheckbox" checked>
-                        <label for="seamlessTilingCheckbox">Seamless Tiling (Toroidal 4D Mapping)</label>
+                        <label for="seamlessTilingCheckbox">Seamless Tiling (4D Toroidal Mapping)</label>
                     </div>
                     <div class="checkbox-row">
-                        <input type="checkbox" id="showNormalMapCheckbox">
-                        <label for="showNormalMapCheckbox">Show Normal Map in 3D Preview</label>
+                        <input type="checkbox" id="livePreviewToggle" checked>
+                        <label for="livePreviewToggle">Live Preview Streaming</label>
                     </div>
-                    <label>Normal Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="directXNormalCheckbox">
+                        <label for="directXNormalCheckbox">DirectX Normal Map (-Y Inverted)</label>
+                    </div>
+                    <label>Normal Map Filter Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
                     <input type="range" id="normalStrength" min="0.5" max="10.0" step="0.1" value="3.0">
-                    
-                    <button class="action-btn btn-download" id="downloadNormalBtn" style="width: 100%;">Export Normal Map</button>
                 </div>
             </details>
 
             <div class="action-buttons">
-                <button class="action-btn btn-random" id="randomBtn">Randomize All</button>
-                <button class="action-btn btn-generate" id="generateBtn">Force Render</button>
+                <button class="action-btn btn-random" id="randomBtn">🎲 Randomize All</button>
+                <button class="action-btn btn-generate" id="generateBtn">⚡ Force Render</button>
             </div>
         </div>
 
         <!-- Visualizer Column -->
         <div class="visualizer-column">
             
-            <!-- 3D Preview -->
+            <!-- 3D Preview Card -->
             <div class="canvas-card">
                 <div class="card-header">
-                    <span class="card-title">3D Preview (Tiled 2x2)</span>
-                    <select id="meshSelect" style="width: auto; margin:0; padding: 4px;">
-                        <option value="block">Block (Cube)</option>
-                        <option value="sphere">Ball (Sphere)</option>
-                        <option value="cylinder">Cylinder</option>
-                        <option value="wedge">Wedge</option>
-                        <option value="cornerWedge">Corner Wedge</option>
-                        <option value="torus">Torus (Donut)</option>
-                        <option value="plane">Plane (Flat)</option>
-                        <option value="cone">Cone</option>
-                        <option value="icosahedron">Icosahedron</option>
-                    </select>
+                    <span class="card-title">🌐 3D Real-Time PBR Viewport</span>
+                    <div class="header-controls">
+                        <!-- Channel inspection -->
+                        <select id="viewportChannel" style="width: auto; margin:0; padding: 4px 6px; font-size: 0.78rem;">
+                            <option value="lit">View: Full Lit PBR</option>
+                            <option value="diffuse">View: Diffuse Only</option>
+                            <option value="normal">View: Normal Map</option>
+                            <option value="height">View: Height Map</option>
+                            <option value="roughness">View: Roughness Map</option>
+                            <option value="ao">View: Ambient Occlusion</option>
+                        </select>
+
+                        <!-- Mesh selector -->
+                        <select id="meshSelect" style="width: auto; margin:0; padding: 4px 6px; font-size: 0.78rem;">
+                            <option value="block">Block (Cube)</option>
+                            <option value="sphere" selected>Ball (Sphere)</option>
+                            <option value="torusKnot">Torus Knot</option>
+                            <option value="cylinder">Cylinder</option>
+                            <option value="wedge">Wedge</option>
+                            <option value="cornerWedge">Corner Wedge</option>
+                            <option value="torus">Torus (Donut)</option>
+                            <option value="plane">Plane (Flat)</option>
+                            <option value="cone">Cone</option>
+                            <option value="icosahedron">Icosahedron</option>
+                        </select>
+
+                        <!-- Tiling Repeat -->
+                        <select id="tilingRepeatSelect" style="width: auto; margin:0; padding: 4px 6px; font-size: 0.78rem;">
+                            <option value="1">1×1 Tile</option>
+                            <option value="2" selected>2×2 Tiles</option>
+                            <option value="4">4×4 Tiles</option>
+                            <option value="8">8×8 Tiles</option>
+                        </select>
+
+                        <!-- Controls -->
+                        <button class="btn-small" style="background:#444;" id="toggleRotateBtn" title="Toggle Auto-Rotation">⏸</button>
+                        <button class="btn-small" style="background:#444;" id="toggleWireframeBtn" title="Toggle Wireframe">🕸</button>
+                        <button class="btn-small" style="background:#444;" id="resetCameraBtn" title="Reset Camera">🎯</button>
+                    </div>
                 </div>
+
                 <div id="threeContainer">
+                    <div id="threeOfflineNotice">
+                        ⚠️ <strong>3D WebGL Viewport is currently offline</strong> (Three.js CDN unreachable or blocked).<br>
+                        Procedural 2D Texture generation, PBR maps, and high-res exports are 100% operational below.
+                    </div>
                     <div id="loader">
-                        <div id="loaderText">Processing Texture...</div>
+                        <div id="loaderText">Initializing Workers...</div>
                         <div id="progressBarContainer">
                             <div id="progressBar"></div>
                         </div>
-                        <span>Generates in chunks via multi-threaded workers.</span>
+                        <span>Multi-threaded procedural chunk generation.</span>
+                    </div>
+                    <div class="viewport-badges">
+                        <span class="v-badge" id="vMeshBadge">Sphere</span>
+                        <span class="v-badge" id="vTilingBadge">2×2 Repeat</span>
+                        <span class="v-badge" id="vChannelBadge">Lit PBR</span>
                     </div>
                 </div>
             </div>
 
-            <!-- 2D Texture -->
+            <!-- 2D Texture Map Card -->
             <div class="canvas-card">
                 <div class="card-header">
-                    <span class="card-title">2D Texture Map</span>
-                    <button class="btn-small btn-download" id="downloadBtn">Download .PNG</button>
+                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                        <span class="card-title">🗺 2D Map Inspection</span>
+                        <div class="channel-pills">
+                            <button class="channel-pill active" data-map="diffuse">Diffuse</button>
+                            <button class="channel-pill" data-map="normal">Normal</button>
+                            <button class="channel-pill" data-map="height">Height</button>
+                            <button class="channel-pill" data-map="roughness">Roughness</button>
+                            <button class="channel-pill" data-map="ao">Ambient Occlusion</button>
+                        </div>
+                    </div>
+                    <div class="header-controls">
+                        <button class="btn-small btn-download" id="downloadCurrentBtn">📥 Download Current</button>
+                        <button class="btn-small" style="background:#8e44ad;" id="downloadAllPbrBtn">📦 Download All Maps</button>
+                    </div>
                 </div>
+
                 <canvas id="textureCanvas" width="256" height="256"></canvas>
             </div>
 
@@ -630,476 +851,555 @@
 
 <script>
 /**
- * INLINED NOISE GENERATOR WORKER SOURCE WITH INFINITE GRADIENT SUPPORT
+ * INLINED NOISE WORKER SOURCE
+ * Synchronized with noiseWorker.js. Guaranteed to run in file://, http://, and offline.
  */
-const workerSource = `
+const inlineWorkerSource = `
 class SeededRandom {
-    constructor(seed) { this.seed = seed; }
+    constructor(seed) { this.seed = (Number(seed) || 12345) >>> 0; }
     next() {
-        var t = this.seed += 0x6D2B79F5;
+        let t = (this.seed = (this.seed + 0x6D2B79F5) >>> 0);
         t = Math.imul(t ^ (t >>> 15), t | 1);
         t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 }
-
 const lerp = (a, b, t) => a + t * (b - a);
 const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
-
+const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
+const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
+const F4 = (Math.sqrt(5.0) - 1.0) / 4.0;
+const G4 = (5.0 - Math.sqrt(5.0)) / 20.0;
+const grad2 = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
 const grad4 = [
-  [1, 1, 1, 0], [-1, 1, 1, 0], [1, -1, 1, 0], [-1, -1, 1, 0],
-  [1, 1, -1, 0], [-1, 1, -1, 0], [1, -1, -1, 0], [-1, -1, -1, 0],
-  [1, 1, 0, 1], [-1, 1, 0, 1], [1, -1, 0, 1], [-1, -1, 0, 1],
-  [1, 1, 0, -1], [-1, 1, 0, -1], [1, -1, 0, -1], [-1, -1, 0, -1],
-  [1, 0, 1, 1], [-1, 0, 1, 1], [1, 0, -1, 1], [-1, 0, -1, 1],
-  [1, 0, 1, -1], [-1, 0, 1, -1], [1, 0, -1, -1], [-1, 0, -1, -1],
-  [0, 1, 1, 1], [0, -1, 1, 1], [0, 1, -1, 1], [0, -1, -1, 1],
-  [0, 1, 1, -1], [0, -1, 1, -1], [0, 1, -1, -1], [0, -1, -1, -1]
-].map(v => {
-  const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3]);
-  return [v[0]/len, v[1]/len, v[2]/len, v[3]/len];
-});
+    [0,1,1,1],[0,1,1,-1],[0,1,-1,1],[0,1,-1,-1],[0,-1,1,1],[0,-1,1,-1],[0,-1,-1,1],[0,-1,-1,-1],
+    [1,0,1,1],[1,0,1,-1],[1,0,-1,1],[1,0,-1,-1],[-1,0,1,1],[-1,0,1,-1],[-1,0,-1,1],[-1,0,-1,-1],
+    [1,1,0,1],[1,1,0,-1],[1,-1,0,1],[1,-1,0,-1],[-1,1,0,1],[-1,1,0,-1],[-1,-1,0,1],[-1,-1,0,-1],
+    [1,1,1,0],[1,1,-1,0],[1,-1,1,0],[1,-1,-1,0],[-1,1,1,0],[-1,1,-1,0],[-1,-1,1,0],[-1,-1,-1,0]
+].map(v => { const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3]); return [v[0]/len, v[1]/len, v[2]/len, v[3]/len]; });
 
 class NoiseGenerator {
     constructor(seed) {
-        this.seed = seed;
-        this.prng = new SeededRandom(seed);
-        this.p = new Uint8Array(512);
-        this.perm = new Uint8Array(512);
+        this.seed = (Number(seed) || 12345) >>> 0;
+        this.prng = new SeededRandom(this.seed);
+        this.p = new Uint8Array(256);
         for(let i=0; i<256; i++) this.p[i] = i;
-        for(let i=0; i<256; i++) {
-            const r = Math.floor(this.prng.next() * 256);
-            [this.p[i], this.p[r]] = [this.p[r], this.p[i]];
+        for(let i=255; i>0; i--) {
+            const r = Math.floor(this.prng.next() * (i + 1));
+            const tmp = this.p[i]; this.p[i] = this.p[r]; this.p[r] = tmp;
         }
-        for(let i=0; i<512; i++) this.perm[i] = this.p[i & 255];
+        this.perm = new Uint16Array(1024);
+        for(let i=0; i<1024; i++) this.perm[i] = this.p[i & 255];
     }
-    
-    grad(hash, x, y) {
+    gradPerlin2D(hash, x, y) {
         const h = hash & 15;
         const u = h < 8 ? x : y;
         const v = h < 4 ? y : (h === 12 || h === 14 ? x : 0);
         return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
     }
-    
     perlin(x, y) {
         const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
         x -= Math.floor(x); y -= Math.floor(y);
         const u = fade(x); const v = fade(y);
-        const A = this.perm[X]+Y, AA = this.perm[A], AB = this.perm[A+1];
-        const B = this.perm[X+1]+Y, BA = this.perm[B], BB = this.perm[B+1];
-        return lerp(lerp(this.grad(this.perm[AA], x, y), this.grad(this.perm[BA], x-1, y), u),
-                    lerp(this.grad(this.perm[AB], x, y-1), this.grad(this.perm[BB], x-1, y-1), u), v);
+        const perm = this.perm;
+        const A = perm[X] + Y, AA = perm[A], AB = perm[A + 1];
+        const B = perm[X + 1] + Y, BA = perm[B], BB = perm[B + 1];
+        return lerp(lerp(this.gradPerlin2D(perm[AA], x, y), this.gradPerlin2D(perm[BA], x - 1, y), u),
+                    lerp(this.gradPerlin2D(perm[AB], x, y - 1), this.gradPerlin2D(perm[BB], x - 1, y - 1), u), v);
     }
-    
+    perlin4d(x, y, z, w) {
+        const ix0 = Math.floor(x) & 255; const iy0 = Math.floor(y) & 255;
+        const iz0 = Math.floor(z) & 255; const iw0 = Math.floor(w) & 255;
+        const ix1 = (ix0 + 1) & 255; const iy1 = (iy0 + 1) & 255;
+        const iz1 = (iz0 + 1) & 255; const iw1 = (iw0 + 1) & 255;
+        const fx = x - Math.floor(x); const fy = y - Math.floor(y);
+        const fz = z - Math.floor(z); const fw = w - Math.floor(w);
+        const u = fade(fx); const v = fade(fy); const t = fade(fz); const s = fade(fw);
+        const perm = this.perm;
+        const h0 = perm[ix0], h1 = perm[ix1];
+        const h00 = perm[h0 + iy0], h10 = perm[h1 + iy0];
+        const h01 = perm[h0 + iy1], h11 = perm[h1 + iy1];
+        const h000 = perm[h00 + iz0], h100 = perm[h10 + iz0];
+        const h010 = perm[h01 + iz0], h110 = perm[h11 + iz0];
+        const h001 = perm[h00 + iz1], h101 = perm[h10 + iz1];
+        const h011 = perm[h01 + iz1], h111 = perm[h11 + iz1];
+        const h0000 = perm[h000 + iw0], h1000 = perm[h100 + iw0];
+        const h0100 = perm[h010 + iw0], h1100 = perm[h110 + iw0];
+        const h0010 = perm[h001 + iw0], h1010 = perm[h101 + iw0];
+        const h0110 = perm[h011 + iw0], h1110 = perm[h111 + iw0];
+        const h0001 = perm[h000 + iw1], h1001 = perm[h100 + iw1];
+        const h0101 = perm[h010 + iw1], h1101 = perm[h110 + iw1];
+        const h0011 = perm[h001 + iw1], h1011 = perm[h101 + iw1];
+        const h0111 = perm[h011 + iw1], h1111 = perm[h111 + iw1];
+        const dot = (hash, dx, dy, dz, dw) => {
+            const g = grad4[hash & 31];
+            return g[0]*dx + g[1]*dy + g[2]*dz + g[3]*dw;
+        };
+        const n0000 = dot(h0000, fx, fy, fz, fw);
+        const n1000 = dot(h1000, fx - 1, fy, fz, fw);
+        const n0100 = dot(h0100, fx, fy - 1, fz, fw);
+        const n1100 = dot(h1100, fx - 1, fy - 1, fz, fw);
+        const n0010 = dot(h0010, fx, fy, fz - 1, fw);
+        const n1010 = dot(h1010, fx - 1, fy, fz - 1, fw);
+        const n0110 = dot(h0110, fx, fy - 1, fz - 1, fw);
+        const n1110 = dot(h1110, fx - 1, fy - 1, fz - 1, fw);
+        const n0001 = dot(h0001, fx, fy, fz, fw - 1);
+        const n1001 = dot(h1001, fx - 1, fy, fz, fw - 1);
+        const n0101 = dot(h0101, fx, fy - 1, fz, fw - 1);
+        const n1101 = dot(h1101, fx - 1, fy - 1, fz - 1, fw - 1);
+        const n0011 = dot(h0011, fx, fy, fz - 1, fw - 1);
+        const n1011 = dot(h1011, fx - 1, fy, fz - 1, fw - 1);
+        const n0111 = dot(h0111, fx, fy - 1, fz - 1, fw - 1);
+        const n1111 = dot(h1111, fx - 1, fy - 1, fz - 1, fw - 1);
+        const x000 = lerp(n0000, n1000, u); const x100 = lerp(n0100, n1100, u);
+        const x010 = lerp(n0010, n1010, u); const x110 = lerp(n0110, n1110, u);
+        const x001 = lerp(n0001, n1001, u); const x101 = lerp(n0101, n1101, u);
+        const x011 = lerp(n0011, n1011, u); const x111 = lerp(n0111, n1111, u);
+        const y00 = lerp(x000, x100, v); const y10 = lerp(x010, x110, v);
+        const y01 = lerp(x001, x101, v); const y11 = lerp(x011, x111, v);
+        const z0 = lerp(y00, y10, t); const z1 = lerp(y01, y11, t);
+        return lerp(z0, z1, s);
+    }
+    simplex2d(x, y) {
+        const s = (x + y) * F2;
+        const i = Math.floor(x + s); const j = Math.floor(y + s);
+        const t = (i + j) * G2;
+        const X0 = i - t; const Y0 = j - t;
+        const x0 = x - X0; const y0 = y - Y0;
+        let i1 = x0 > y0 ? 1 : 0, j1 = x0 > y0 ? 0 : 1;
+        const x1 = x0 - i1 + G2; const y1 = y0 - j1 + G2;
+        const x2 = x0 - 1.0 + 2.0 * G2; const y2 = y0 - 1.0 + 2.0 * G2;
+        const perm = this.perm;
+        const ii = i & 255; const jj = j & 255;
+        const gi0 = perm[ii + perm[jj]] & 7;
+        const gi1 = perm[ii + i1 + perm[jj + j1]] & 7;
+        const gi2 = perm[ii + 1 + perm[jj + 1]] & 7;
+        let n0 = 0, n1 = 0, n2 = 0;
+        let t0 = 0.5 - x0*x0 - y0*y0;
+        if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad2[gi0][0] * x0 + grad2[gi0][1] * y0); }
+        let t1 = 0.5 - x1*x1 - y1*y1;
+        if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad2[gi1][0] * x1 + grad2[gi1][1] * y1); }
+        let t2 = 0.5 - x2*x2 - y2*y2;
+        if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad2[gi2][0] * x2 + grad2[gi2][1] * y2); }
+        return 70.0 * (n0 + n1 + n2);
+    }
+    simplex4d(x, y, z, w) {
+        const s = (x + y + z + w) * F4;
+        const i = Math.floor(x + s); const j = Math.floor(y + s);
+        const k = Math.floor(z + s); const l = Math.floor(w + s);
+        const t = (i + j + k + l) * G4;
+        const X0 = i - t; const Y0 = j - t; const Z0 = k - t; const W0 = l - t;
+        const x0 = x - X0; const y0 = y - Y0; const z0 = z - Z0; const w0 = w - W0;
+        let c = 0;
+        if (x0 > y0) c |= 1; if (x0 > z0) c |= 2; if (x0 > w0) c |= 4;
+        if (y0 > z0) c |= 8; if (y0 > w0) c |= 16; if (z0 > w0) c |= 32;
+        const rankx = ((c & 1)?1:0) + ((c & 2)?1:0) + ((c & 4)?1:0);
+        const ranky = ((c & 1)?0:1) + ((c & 8)?1:0) + ((c & 16)?1:0);
+        const rankz = ((c & 2)?0:1) + ((c & 8)?0:1) + ((c & 32)?1:0);
+        const rankw = ((c & 4)?0:1) + ((c & 16)?0:1) + ((c & 32)?0:1);
+        const i1 = rankx >= 3?1:0, j1 = ranky >= 3?1:0, k1 = rankz >= 3?1:0, l1 = rankw >= 3?1:0;
+        const i2 = rankx >= 2?1:0, j2 = ranky >= 2?1:0, k2 = rankz >= 2?1:0, l2 = rankw >= 2?1:0;
+        const i3 = rankx >= 1?1:0, j3 = ranky >= 1?1:0, k3 = rankz >= 1?1:0, l3 = rankw >= 1?1:0;
+        const x1 = x0 - i1 + G4, y1 = y0 - j1 + G4, z1 = z0 - k1 + G4, w1 = w0 - l1 + G4;
+        const x2 = x0 - i2 + 2.0*G4, y2 = y0 - j2 + 2.0*G4, z2 = z0 - k2 + 2.0*G4, w2 = w0 - l2 + 2.0*G4;
+        const x3 = x0 - i3 + 3.0*G4, y3 = y0 - j3 + 3.0*G4, z3 = z0 - k3 + 3.0*G4, w3 = w0 - l3 + 3.0*G4;
+        const x4 = x0 - 1.0 + 4.0*G4, y4 = y0 - 1.0 + 4.0*G4, z4 = z0 - 1.0 + 4.0*G4, w4 = w0 - 1.0 + 4.0*G4;
+        const perm = this.perm;
+        const ii = i & 255, jj = j & 255, kk = k & 255, ll = l & 255;
+        const gi0 = perm[ii + perm[jj + perm[kk + perm[ll]]]] & 31;
+        const gi1 = perm[ii + i1 + perm[jj + j1 + perm[kk + k1 + perm[ll + l1]]]] & 31;
+        const gi2 = perm[ii + i2 + perm[jj + j2 + perm[kk + k2 + perm[ll + l2]]]] & 31;
+        const gi3 = perm[ii + i3 + perm[jj + j3 + perm[kk + k3 + perm[ll + l3]]]] & 31;
+        const gi4 = perm[ii + 1 + perm[jj + 1 + perm[kk + 1 + perm[ll + 1]]]] & 31;
+        let n0 = 0, n1 = 0, n2 = 0, n3 = 0, n4 = 0;
+        let t0 = 0.6 - x0*x0 - y0*y0 - z0*z0 - w0*w0;
+        if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad4[gi0][0]*x0 + grad4[gi0][1]*y0 + grad4[gi0][2]*z0 + grad4[gi0][3]*w0); }
+        let t1 = 0.6 - x1*x1 - y1*y1 - z1*z1 - w1*w1;
+        if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad4[gi1][0]*x1 + grad4[gi1][1]*y1 + grad4[gi1][2]*z1 + grad4[gi1][3]*w1); }
+        let t2 = 0.6 - x2*x2 - y2*y2 - z2*z2 - w2*w2;
+        if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad4[gi2][0]*x2 + grad4[gi2][1]*y2 + grad4[gi2][2]*z2 + grad4[gi2][3]*w2); }
+        let t3 = 0.6 - x3*x3 - y3*y3 - z3*z3 - w3*w3;
+        if (t3 > 0) { t3 *= t3; n3 = t3 * t3 * (grad4[gi3][0]*x3 + grad4[gi3][1]*y3 + grad4[gi3][2]*z3 + grad4[gi3][3]*w3); }
+        let t4 = 0.6 - x4*x4 - y4*y4 - z4*z4 - w4*w4;
+        if (t4 > 0) { t4 *= t4; n4 = t4 * t4 * (grad4[gi4][0]*x4 + grad4[gi4][1]*y4 + grad4[gi4][2]*z4 + grad4[gi4][3]*w4); }
+        return 27.0 * (n0 + n1 + n2 + n3 + n4);
+    }
     value(x, y) {
         const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
         x -= Math.floor(x); y -= Math.floor(y);
         const u = fade(x); const v = fade(y);
-        const n00 = this.perm[X + this.perm[Y]] / 255;
-        const n10 = this.perm[X + 1 + this.perm[Y]] / 255;
-        const n01 = this.perm[X + this.perm[Y + 1]] / 255;
-        const n11 = this.perm[X + 1 + this.perm[Y + 1]] / 255;
+        const perm = this.perm;
+        const n00 = perm[X + perm[Y]] / 255;
+        const n10 = perm[X + 1 + perm[Y]] / 255;
+        const n01 = perm[X + perm[Y + 1]] / 255;
+        const n11 = perm[X + 1 + perm[Y + 1]] / 255;
         return (lerp(lerp(n00, n10, u), lerp(n01, n11, u), v) * 2) - 1;
     }
-    
-    worley(x, y, type, isManhattan) {
+    value4d(x, y, z, w) {
+        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
+        const Z = Math.floor(z) & 255; const W = Math.floor(w) & 255;
+        const fx = x - Math.floor(x); const fy = y - Math.floor(y);
+        const fz = z - Math.floor(z); const fw = w - Math.floor(w);
+        const u = fade(fx), v = fade(fy), t = fade(fz), s = fade(fw);
+        const p = this.perm;
+        const h0 = p[X], h1 = p[X + 1];
+        const h00 = p[h0 + Y], h10 = p[h1 + Y], h01 = p[h0 + Y + 1], h11 = p[h1 + Y + 1];
+        const h000 = p[h00 + Z], h100 = p[h10 + Z], h010 = p[h01 + Z], h110 = p[h11 + Z];
+        const h001 = p[h00 + Z + 1], h101 = p[h10 + Z + 1], h011 = p[h01 + Z + 1], h111 = p[h11 + Z + 1];
+        const c0000 = p[h000 + W] / 255, c1000 = p[h100 + W] / 255;
+        const c0100 = p[h010 + W] / 255, c1100 = p[h110 + W] / 255;
+        const c0010 = p[h001 + W] / 255, c1010 = p[h101 + W] / 255;
+        const c0110 = p[h011 + W] / 255, c1110 = p[h111 + W] / 255;
+        const c0001 = p[h000 + W + 1] / 255, c1001 = p[h100 + W + 1] / 255;
+        const c0101 = p[h010 + W + 1] / 255, c1101 = p[h100 + W + 1] / 255;
+        const c0011 = p[h001 + W + 1] / 255, c1011 = p[h101 + W + 1] / 255;
+        const c0111 = p[h011 + W + 1] / 255, c1111 = p[h111 + W + 1] / 255;
+        const x000 = lerp(c0000, c1000, u), x100 = lerp(c0100, c1100, u);
+        const x010 = lerp(c0010, c1010, u), x110 = lerp(c0110, c1110, u);
+        const x001 = lerp(c0001, c1001, u), x101 = lerp(c0101, c1101, u);
+        const x011 = lerp(c0011, c1011, u), x111 = lerp(c0111, c1111, u);
+        const y00 = lerp(x000, x100, v), y10 = lerp(x010, x110, v);
+        const y01 = lerp(x001, x101, v), y11 = lerp(x011, x111, v);
+        const z0 = lerp(y00, y10, t), z1 = lerp(y01, y11, t);
+        return lerp(z0, z1, s) * 2 - 1;
+    }
+    computeDistance(dx, dy, metric) {
+        if (metric === 'manhattan') return Math.abs(dx) + Math.abs(dy);
+        if (metric === 'chebyshev') return Math.max(Math.abs(dx), Math.abs(dy));
+        if (metric === 'minkowski') { const s = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy)); return s * s; }
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+    worley(x, y, type, metric) {
         const xInt = Math.floor(x); const yInt = Math.floor(y);
         const xFrac = x - xInt; const yFrac = y - yInt;
-        let minDist = 100; let secondMinDist = 100;
-        for(let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for(let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
-                const neighborX = xInt + xNeighbor;
-                const neighborY = yInt + yNeighbor;
-                let hash = (Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.seed) * 43758.5453);
-                hash = hash - Math.floor(hash); const pointX = xNeighbor + hash; 
-                hash = (Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.seed) * 23421.6543);
-                hash = hash - Math.floor(hash); const pointY = yNeighbor + hash;
-                const diffX = pointX - xFrac; const diffY = pointY - yFrac;
-                let d = isManhattan ? Math.abs(diffX) + Math.abs(diffY) : Math.sqrt(diffX*diffX + diffY*diffY);
-                if (d < minDist) { secondMinDist = minDist; minDist = d; } else if (d < secondMinDist) { secondMinDist = d; }
+        let minDist = 100, secondMinDist = 100;
+        for (let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
+            for (let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
+                const neighborX = xInt + xNeighbor; const neighborY = yInt + yNeighbor;
+                let hash1 = Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.seed) * 43758.5453;
+                hash1 = hash1 - Math.floor(hash1);
+                const pointX = xNeighbor + hash1;
+                let hash2 = Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.seed) * 23421.6543;
+                hash2 = hash2 - Math.floor(hash2);
+                const pointY = yNeighbor + hash2;
+                const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
+                if (d < minDist) { secondMinDist = minDist; minDist = d; }
+                else if (d < secondMinDist) { secondMinDist = d; }
             }
         }
-        if(type === 'f1') return (minDist * 2) - 1;
-        if(type === 'f2') return (secondMinDist * 2) - 1;
+        if (type === 'f1') return (minDist * 2) - 1;
+        if (type === 'f2') return (secondMinDist * 2) - 1;
+        if (type === 'f1+f2') return ((minDist + secondMinDist) * 1.5) - 1;
         return ((secondMinDist - minDist) * 4) - 1;
     }
-
-    perlin4d(x, y, z, w) {
-        const ix0 = Math.floor(x) & 255;
-        const iy0 = Math.floor(y) & 255;
-        const iz0 = Math.floor(z) & 255;
-        const iw0 = Math.floor(w) & 255;
-
-        const ix1 = (ix0 + 1) & 255;
-        const iy1 = (iy0 + 1) & 255;
-        const iz1 = (iz0 + 1) & 255;
-        const iw1 = (iw0 + 1) & 255;
-
-        const fx = x - Math.floor(x);
-        const fy = y - Math.floor(y);
-        const fz = z - Math.floor(z);
-        const fw = w - Math.floor(w);
-
-        const u = fade(fx);
-        const v = fade(fy);
-        const t = fade(fz);
-        const s = fade(fw);
-
-        const perm = this.perm;
-
-        const h0 = perm[ix0];
-        const h1 = perm[ix1];
-
-        const h00 = perm[h0 + iy0];
-        const h10 = perm[h1 + iy0];
-        const h01 = perm[h0 + iy1];
-        const h11 = perm[h1 + iy1];
-
-        const h000 = perm[h00 + iz0];
-        const h100 = perm[h10 + iz0];
-        const h010 = perm[h01 + iz0];
-        const h110 = perm[h11 + iz0];
-        const h001 = perm[h00 + iz1];
-        const h101 = perm[h10 + iz1];
-        const h011 = perm[h01 + iz1];
-        const h111 = perm[h11 + iz1];
-
-        const h0000 = perm[h000 + iw0];
-        const h1000 = perm[h100 + iw0];
-        const h0100 = perm[h010 + iw0];
-        const h1100 = perm[h110 + iw0];
-        const h0010 = perm[h001 + iw0];
-        const h1010 = perm[h101 + iw0];
-        const h0110 = perm[h011 + iw0];
-        const h1110 = perm[h111 + iw0];
-
-        const h0001 = perm[h000 + iw1];
-        const h1001 = perm[h100 + iw1];
-        const h0101 = perm[h010 + iw1];
-        const h1101 = perm[h110 + iw1];
-        const h0011 = perm[h001 + iw1];
-        const h1011 = perm[h101 + iw1];
-        const h0111 = perm[h011 + iw1];
-        const h1111 = perm[h111 + iw1];
-
-        const gradDot = (hash, dx, dy, dz, dw) => {
-            const g = grad4[hash & 31];
-            return g[0]*dx + g[1]*dy + g[2]*dz + g[3]*dw;
-        };
-
-        const n0000 = gradDot(h0000, fx, fy, fz, fw);
-        const n1000 = gradDot(h1000, fx - 1, fy, fz, fw);
-        const n0100 = gradDot(h0100, fx, fy - 1, fz, fw);
-        const n1100 = gradDot(h1100, fx - 1, fy - 1, fz, fw);
-        const n0010 = gradDot(h0010, fx, fy, fz - 1, fw);
-        const n1010 = gradDot(h1010, fx - 1, fy, fz - 1, fw);
-        const n0110 = gradDot(h0110, fx, fy - 1, fz - 1, fw);
-        const n1110 = gradDot(h1110, fx - 1, fy - 1, fz - 1, fw);
-
-        const n0001 = gradDot(h0001, fx, fy, fz, fw - 1);
-        const n1001 = gradDot(h1001, fx - 1, fy, fz, fw - 1);
-        const n0101 = gradDot(h0101, fx, fy - 1, fz, fw - 1);
-        const n1101 = gradDot(h1101, fx - 1, fy - 1, fz - 1, fw - 1);
-        const n0011 = gradDot(h0011, fx, fy, fz - 1, fw - 1);
-        const n1011 = gradDot(h1011, fx - 1, fy, fz - 1, fw - 1);
-        const n0111 = gradDot(h0111, fx, fy - 1, fz - 1, fw - 1);
-        const n1111 = gradDot(h1111, fx - 1, fy - 1, fz - 1, fw - 1);
-
-        const x000 = lerp(n0000, n1000, u);
-        const x100 = lerp(n0100, n1100, u);
-        const x010 = lerp(n0010, n1010, u);
-        const x110 = lerp(n0110, n1110, u);
-        const x001 = lerp(n0001, n1001, u);
-        const x101 = lerp(n0101, n1101, u);
-        const x011 = lerp(n0011, n1011, u);
-        const x111 = lerp(n0111, n1111, u);
-
-        const y00 = lerp(x000, x100, v);
-        const y10 = lerp(x010, x110, v);
-        const y01 = lerp(x001, x101, v);
-        const y11 = lerp(x011, x111, v);
-
-        const z0 = lerp(y00, y10, t);
-        const z1 = lerp(y01, y11, t);
-
-        return lerp(z0, z1, s);
-    }
-
-    worleySeamless(xScaled, yScaled, periodX, periodY, type, isManhattan) {
+    worleySeamless(xScaled, yScaled, periodX, periodY, type, metric) {
         const xInt = Math.floor(xScaled); const yInt = Math.floor(yScaled);
         const xFrac = xScaled - xInt; const yFrac = yScaled - yInt;
-        let minDist = 100; let secondMinDist = 100;
-        for(let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for(let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
-                const neighborX = xInt + xNeighbor;
-                const neighborY = yInt + yNeighbor;
-                
+        let minDist = 100, secondMinDist = 100;
+        for (let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
+            for (let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
+                const neighborX = xInt + xNeighbor; const neighborY = yInt + yNeighbor;
                 const wrappedX = ((neighborX % periodX) + periodX) % periodX;
                 const wrappedY = ((neighborY % periodY) + periodY) % periodY;
-                
-                let hash = (Math.sin(wrappedX * 12.9898 + wrappedY * 78.233 + this.seed) * 43758.5453);
-                hash = hash - Math.floor(hash); const pointX = xNeighbor + hash; 
-                
-                hash = (Math.sin(wrappedX * 98.233 + wrappedY * 12.9898 + this.seed) * 23421.6543);
-                hash = hash - Math.floor(hash); const pointY = yNeighbor + hash;
-                
-                const diffX = pointX - xFrac; const diffY = pointY - yFrac;
-                let d = isManhattan ? Math.abs(diffX) + Math.abs(diffY) : Math.sqrt(diffX*diffX + diffY*diffY);
-                if (d < minDist) { secondMinDist = minDist; minDist = d; } else if (d < secondMinDist) { secondMinDist = d; }
+                let hash1 = Math.sin(wrappedX * 12.9898 + wrappedY * 78.233 + this.seed) * 43758.5453;
+                hash1 = hash1 - Math.floor(hash1);
+                const pointX = xNeighbor + hash1;
+                let hash2 = Math.sin(wrappedX * 98.233 + wrappedY * 12.9898 + this.seed) * 23421.6543;
+                hash2 = hash2 - Math.floor(hash2);
+                const pointY = yNeighbor + hash2;
+                const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
+                if (d < minDist) { secondMinDist = minDist; minDist = d; }
+                else if (d < secondMinDist) { secondMinDist = d; }
             }
         }
-        if(type === 'f1') return (minDist * 2) - 1;
-        if(type === 'f2') return (secondMinDist * 2) - 1;
+        if (type === 'f1') return (minDist * 2) - 1;
+        if (type === 'f2') return (secondMinDist * 2) - 1;
+        if (type === 'f1+f2') return ((minDist + secondMinDist) * 1.5) - 1;
         return ((secondMinDist - minDist) * 4) - 1;
     }
 }
 
+function hexToRgb(hex) {
+    if (!hex || typeof hex !== 'string') return [0, 0, 0];
+    const clean = hex.trim().replace(/^#/, '');
+    if (clean.length === 3) {
+        return [
+            parseInt(clean[0] + clean[0], 16) || 0,
+            parseInt(clean[1] + clean[1], 16) || 0,
+            parseInt(clean[2] + clean[2], 16) || 0
+        ];
+    }
+    if (clean.length >= 6) {
+        return [
+            parseInt(clean.substring(0, 2), 16) || 0,
+            parseInt(clean.substring(2, 4), 16) || 0,
+            parseInt(clean.substring(4, 6), 16) || 0
+        ];
+    }
+    return [0, 0, 0];
+}
+
+function createGradientLUT(gradientStops, lutSize = 1024) {
+    const lut = new Uint8ClampedArray(lutSize * 4);
+    const stops = (gradientStops && gradientStops.length > 0)
+        ? [...gradientStops].sort((a, b) => a.pos - b.pos)
+        : [{ pos: 0.0, color: '#000000' }, { pos: 1.0, color: '#ffffff' }];
+
+    if (stops.length === 1) {
+        const rgb = hexToRgb(stops[0].color);
+        for (let i = 0; i < lutSize; i++) {
+            const idx = i * 4;
+            lut[idx] = rgb[0]; lut[idx + 1] = rgb[1]; lut[idx + 2] = rgb[2]; lut[idx + 3] = 255;
+        }
+        return lut;
+    }
+    const firstColor = hexToRgb(stops[0].color);
+    const lastColor = hexToRgb(stops[stops.length - 1].color);
+
+    for (let i = 0; i < lutSize; i++) {
+        const t = i / (lutSize - 1);
+        let rgb = [0, 0, 0];
+        if (t <= stops[0].pos) {
+            rgb = firstColor;
+        } else if (t >= stops[stops.length - 1].pos) {
+            rgb = lastColor;
+        } else {
+            for (let s = 0; s < stops.length - 1; s++) {
+                const s1 = stops[s]; const s2 = stops[s + 1];
+                if (t >= s1.pos && t <= s2.pos) {
+                    const span = s2.pos - s1.pos;
+                    const localT = span > 0.00001 ? (t - s1.pos) / span : 0;
+                    const c1 = hexToRgb(s1.color); const c2 = hexToRgb(s2.color);
+                    rgb = [
+                        Math.round(c1[0] + localT * (c2[0] - c1[0])),
+                        Math.round(c1[1] + localT * (c2[1] - c1[1])),
+                        Math.round(c1[2] + localT * (c2[2] - c1[2]))
+                    ];
+                    break;
+                }
+            }
+        }
+        const idx = i * 4;
+        lut[idx] = rgb[0]; lut[idx + 1] = rgb[1]; lut[idx + 2] = rgb[2]; lut[idx + 3] = 255;
+    }
+    return lut;
+}
+
 self.onmessage = function(e) {
-    if (e.data.type === 'RENDER_CHUNK') {
+    if (e.data && e.data.type === 'RENDER_CHUNK') {
         const {
             startY, endY, width, height, seed, noiseType, scale, octaves,
             persistence, lacunarity, ridged, turbStrength, turbScale,
             worleyType, worleyDist, contrast, brightness, invert,
             thresholdEnable, threshold, seamless, gradientStops
         } = e.data;
-        
+
         const noiseGen = new NoiseGenerator(seed);
-        const turbGen = new NoiseGenerator(seed + 999);
-        
-        // Robust Multi-Stop Infinite Gradient Mapping
-        const sortedStops = [...gradientStops].sort((a, b) => a.pos - b.pos);
-        
-        function hexToRgb(hex) {
-            if (!hex) return [0, 0, 0];
-            const shorthandRegex = /^#?([a-f\\d])([a-f\\d])([a-f\\d])$/i;
-            const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
-            const result = /^#?([a-f\\d]{2})([a-f\\d]{2})([a-f\\d]{2})$/i.exec(fullHex);
-            return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
-        }
-        
-        function mapColor(t) {
-            if (!sortedStops || sortedStops.length === 0) return [0, 0, 0];
-            if (sortedStops.length === 1) return hexToRgb(sortedStops[0].color);
-            if (t <= sortedStops[0].pos) return hexToRgb(sortedStops[0].color);
-            if (t >= sortedStops[sortedStops.length - 1].pos) return hexToRgb(sortedStops[sortedStops.length - 1].color);
-            
-            for (let i = 0; i < sortedStops.length - 1; i++) {
-                const s1 = sortedStops[i];
-                const s2 = sortedStops[i + 1];
-                if (t >= s1.pos && t <= s2.pos) {
-                    const range = s2.pos - s1.pos;
-                    const localT = range > 0.000001 ? (t - s1.pos) / range : 0;
-                    const c1 = hexToRgb(s1.color);
-                    const c2 = hexToRgb(s2.color);
-                    return [
-                        Math.round(c1[0] + localT * (c2[0] - c1[0])),
-                        Math.round(c1[1] + localT * (c2[1] - c1[1])),
-                        Math.round(c1[2] + localT * (c2[2] - c1[2]))
-                    ];
-                }
-            }
-            return hexToRgb(sortedStops[sortedStops.length - 1].color);
-        }
-        
-        // Precompute 256-step Look-Up Table
-        const gradientLUT = new Uint8ClampedArray(256 * 4);
-        for(let i = 0; i < 256; i++) {
-            const rgb = mapColor(i / 255);
-            gradientLUT[i * 4]     = rgb[0];
-            gradientLUT[i * 4 + 1] = rgb[1];
-            gradientLUT[i * 4 + 2] = rgb[2];
-            gradientLUT[i * 4 + 3] = 255;
-        }
-        
-        const chunkHeight = endY - startY;
+        const turbGen = new NoiseGenerator(seed + 9999);
+        const LUT_SIZE = 1024;
+        const gradientLUT = createGradientLUT(gradientStops, LUT_SIZE);
+
+        const chunkHeight = Math.max(0, endY - startY);
         const chunkData = new Uint8ClampedArray(width * chunkHeight * 4);
-        const isManhattan = worleyDist === 'manhattan';
-        
+        const heightData = new Float32Array(width * chunkHeight);
+
+        const safeScale = Math.max(1, scale);
+        const safeTurbScale = Math.max(1, turbScale);
+        const twoPi = 2 * Math.PI;
+
         for (let y = startY; y < endY; y++) {
             const localY = y - startY;
             for (let x = 0; x < width; x++) {
                 let u = x / width;
                 let v = y / height;
-                
                 let nx = x;
                 let ny = y;
-                
+
                 if (turbStrength > 0) {
                     let tx, ty;
                     if (seamless) {
-                        const turbR = turbScale / (2 * Math.PI);
-                        const tnx = Math.cos(2 * Math.PI * u) * turbR;
-                        const tny = Math.sin(2 * Math.PI * u) * turbR;
-                        const tnz = Math.cos(2 * Math.PI * v) * turbR;
-                        const tnw = Math.sin(2 * Math.PI * v) * turbR;
-                        
-                        tx = turbGen.perlin4d(tnx, tny, tnz, tnw);
-                        ty = turbGen.perlin4d(tnx + 10, tny + 10, tnz + 10, tnw + 10);
+                        const turbR = safeTurbScale / twoPi;
+                        const tnx = Math.cos(twoPi * u) * turbR;
+                        const tny = Math.sin(twoPi * u) * turbR;
+                        const tnz = Math.cos(twoPi * v) * turbR;
+                        const tnw = Math.sin(twoPi * v) * turbR;
+                        tx = turbGen.simplex4d(tnx, tny, tnz, tnw);
+                        ty = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
                     } else {
-                        tx = turbGen.perlin(x / turbScale, y / turbScale);
-                        ty = turbGen.perlin((x + 1000) / turbScale, (y + 1000) / turbScale);
+                        tx = turbGen.simplex2d(x / safeTurbScale, y / safeTurbScale);
+                        ty = turbGen.simplex2d((x + 1000) / safeTurbScale, (y + 1000) / safeTurbScale);
                     }
                     nx += tx * turbStrength;
                     ny += ty * turbStrength;
-                    
                     u = nx / width;
                     v = ny / height;
                 }
-                
+
                 let noiseValue = 0;
                 let maxValue = 0;
-                
+
                 if (seamless) {
-                    if (noiseType === 'perlin') {
-                        const R = scale / (2 * Math.PI);
-                        const tx = Math.cos(2 * Math.PI * u) * R;
-                        const ty = Math.sin(2 * Math.PI * u) * R;
-                        const tz = Math.cos(2 * Math.PI * v) * R;
-                        const tw = Math.sin(2 * Math.PI * v) * R;
-                        
-                        let amplitude = 1;
-                        let frequency = 1;
+                    if (noiseType === 'simplex') {
+                        const R = safeScale / twoPi;
+                        const tx = Math.cos(twoPi * u) * R; const ty = Math.sin(twoPi * u) * R;
+                        const tz = Math.cos(twoPi * v) * R; const tw = Math.sin(twoPi * v) * R;
+                        let amplitude = 1; let freq = 1;
                         for (let o = 0; o < octaves; o++) {
-                            const sx = tx * frequency;
-                            const sy = ty * frequency;
-                            const sz = tz * frequency;
-                            const sw = tw * frequency;
-                            
-                            let n = noiseGen.perlin4d(sx, sy, sz, sw);
+                            let n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
                             if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            frequency *= lacunarity;
+                            noiseValue += n * amplitude; maxValue += amplitude;
+                            amplitude *= persistence; freq *= lacunarity;
+                        }
+                    } else if (noiseType === 'perlin') {
+                        const R = safeScale / twoPi;
+                        const tx = Math.cos(twoPi * u) * R; const ty = Math.sin(twoPi * u) * R;
+                        const tz = Math.cos(twoPi * v) * R; const tw = Math.sin(twoPi * v) * R;
+                        let amplitude = 1; let freq = 1;
+                        for (let o = 0; o < octaves; o++) {
+                            let n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
+                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                            noiseValue += n * amplitude; maxValue += amplitude;
+                            amplitude *= persistence; freq *= lacunarity;
                         }
                     } else if (noiseType === 'value') {
-                        const R = scale / (2 * Math.PI);
-                        const tx1 = Math.cos(2 * Math.PI * u) * R;
-                        const ty1 = Math.sin(2 * Math.PI * u) * R;
-                        const tz2 = Math.cos(2 * Math.PI * v) * R;
-                        const tw2 = Math.sin(2 * Math.PI * v) * R;
-                        
-                        let amplitude = 1;
-                        let frequency = 1;
+                        const R = safeScale / twoPi;
+                        const tx = Math.cos(twoPi * u) * R; const ty = Math.sin(twoPi * u) * R;
+                        const tz = Math.cos(twoPi * v) * R; const tw = Math.sin(twoPi * v) * R;
+                        let amplitude = 1; let freq = 1;
                         for (let o = 0; o < octaves; o++) {
-                            const sx1 = tx1 * frequency;
-                            const sy1 = ty1 * frequency;
-                            const sz2 = tz2 * frequency;
-                            const sw2 = tw2 * frequency;
-                            
-                            const v1 = noiseGen.value(sx1, sy1);
-                            const v2 = noiseGen.value(sz2, sw2);
-                            let n = (v1 + v2) / 2.0;
-                            
+                            let n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
                             if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            frequency *= lacunarity;
+                            noiseValue += n * amplitude; maxValue += amplitude;
+                            amplitude *= persistence; freq *= lacunarity;
                         }
                     } else {
-                        let periodX = Math.round(width / scale);
-                        let periodY = Math.round(height / scale);
-                        periodX = Math.max(1, periodX);
-                        periodY = Math.max(1, periodY);
-                        
-                        let amplitude = 1;
-                        let frequencyMult = 1;
+                        let periodX = Math.max(1, Math.round(width / safeScale));
+                        let periodY = Math.max(1, Math.round(height / safeScale));
+                        let amplitude = 1; let freqMult = 1;
                         for (let o = 0; o < octaves; o++) {
-                            const pX = Math.max(1, Math.round(periodX * frequencyMult));
-                            const pY = Math.max(1, Math.round(periodY * frequencyMult));
-                            
-                            const xScaled = u * pX;
-                            const yScaled = v * pY;
-                            
-                            let n = noiseGen.worleySeamless(xScaled, yScaled, pX, pY, worleyType, isManhattan);
+                            const pX = Math.max(1, Math.round(periodX * freqMult));
+                            const pY = Math.max(1, Math.round(periodY * freqMult));
+                            let n = noiseGen.worleySeamless(u * pX, v * pY, pX, pY, worleyType, worleyDist);
                             if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            frequencyMult *= lacunarity;
+                            noiseValue += n * amplitude; maxValue += amplitude;
+                            amplitude *= persistence; freqMult *= lacunarity;
                         }
                     }
                 } else {
-                    let amplitude = 1;
-                    let frequency = 1;
+                    let amplitude = 1; let freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        const sampleX = nx / scale * frequency;
-                        const sampleY = ny / scale * frequency;
+                        const sx = (nx / safeScale) * freq;
+                        const sy = (ny / safeScale) * freq;
                         let n;
-                        
-                        if (noiseType === 'perlin') n = noiseGen.perlin(sampleX, sampleY);
-                        else if (noiseType === 'value') n = noiseGen.value(sampleX, sampleY);
-                        else n = noiseGen.worley(sampleX, sampleY, worleyType, isManhattan);
-                        
+                        if (noiseType === 'simplex') n = noiseGen.simplex2d(sx, sy);
+                        else if (noiseType === 'perlin') n = noiseGen.perlin(sx, sy);
+                        else if (noiseType === 'value') n = noiseGen.value(sx, sy);
+                        else n = noiseGen.worley(sx, sy, worleyType, worleyDist);
                         if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                        noiseValue += n * amplitude;
-                        maxValue += amplitude;
-                        amplitude *= persistence;
-                        frequency *= lacunarity;
+                        noiseValue += n * amplitude; maxValue += amplitude;
+                        amplitude *= persistence; freq *= lacunarity;
                     }
                 }
-                
-                if (ridged) {
-                    noiseValue = noiseValue / maxValue;
+
+                if (maxValue > 0) {
+                    noiseValue = ridged ? (noiseValue / maxValue) : ((noiseValue / maxValue + 1) * 0.5);
                 } else {
-                    noiseValue = (noiseValue / maxValue + 1) / 2;
+                    noiseValue = 0.5;
                 }
-                
+
                 if (invert) noiseValue = 1.0 - noiseValue;
                 noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
                 noiseValue = Math.max(0, Math.min(1, noiseValue));
                 if (thresholdEnable) noiseValue = noiseValue >= threshold ? 1.0 : 0.0;
-                
-                const lutIndex = Math.min(255, Math.floor(noiseValue * 256));
-                const idx = (localY * width + x) * 4;
-                chunkData[idx]     = gradientLUT[lutIndex * 4];
-                chunkData[idx + 1] = gradientLUT[lutIndex * 4 + 1];
-                chunkData[idx + 2] = gradientLUT[lutIndex * 4 + 2];
-                chunkData[idx + 3] = 255;
+
+                const pixelIdx = localY * width + x;
+                heightData[pixelIdx] = noiseValue;
+
+                const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.floor(noiseValue * (LUT_SIZE - 1))));
+                const colorOffset = lutIdx * 4;
+                const outOffset = pixelIdx * 4;
+
+                chunkData[outOffset]     = gradientLUT[colorOffset];
+                chunkData[outOffset + 1] = gradientLUT[colorOffset + 1];
+                chunkData[outOffset + 2] = gradientLUT[colorOffset + 2];
+                chunkData[outOffset + 3] = 255;
             }
         }
-        
+
         self.postMessage({
             type: 'CHUNK_COMPLETE',
             data: chunkData,
+            heightData: heightData,
             startY: startY,
             endY: endY
-        }, [chunkData.buffer]);
+        }, [chunkData.buffer, heightData.buffer]);
     }
 };
 `;
 
-const workerBlob = new Blob([workerSource], { type: 'application/javascript' });
-const workerURL = URL.createObjectURL(workerBlob);
+// --- 1. MULTI-TIER WORKER LOADER (NATIVE & BLOB HYBRID) ---
+let workerBlobURL = null;
+let preferExternalWorker = (location.protocol === 'http:' || location.protocol === 'https:');
 
-// --- 1. HARDWARE PROBES AND RESOLUTION VALIDATION ---
-
-function probeMaxCanvasSize(targetW, targetH) {
-  try {
-    const testCanvas = document.createElement('canvas');
-    testCanvas.width = targetW;
-    testCanvas.height = targetH;
-    const ctx = testCanvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return false;
-    ctx.fillRect(0, 0, 1, 1);
-    const probe = ctx.getImageData(0, 0, 1, 1);
-    return probe && probe.data.length === 4;
-  } catch (e) {
-    return false;
-  }
+function createWorker() {
+    if (preferExternalWorker) {
+        try {
+            return new Worker('noiseWorker.js');
+        } catch (e) {
+            preferExternalWorker = false;
+        }
+    }
+    if (!workerBlobURL) {
+        const blob = new Blob([inlineWorkerSource], { type: 'application/javascript' });
+        workerBlobURL = URL.createObjectURL(blob);
+    }
+    return new Worker(workerBlobURL);
 }
 
-let detectedMax = 4096;
-function detectLimit() {
-    const sizes = [32768, 16384, 12288, 8192, 4096, 2048];
-    for (let size of sizes) {
-        if (probeMaxCanvasSize(size, size)) {
-            detectedMax = size;
+// --- 2. HARDWARE PROBES & DEVICE CANVAS SAFETY ---
+let maxGpuTextureSize = 4096;
+let detectedCanvasLimit = 4096;
+
+function detectHardwareCapabilities() {
+    try {
+        const testCanvas = document.createElement('canvas');
+        const gl = testCanvas.getContext('webgl') || testCanvas.getContext('experimental-webgl');
+        if (gl) {
+            maxGpuTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE) || 4096;
+        }
+    } catch (e) {
+        maxGpuTextureSize = 4096;
+    }
+
+    const testSizes = [16384, 8192, 4096, 2048];
+    detectedCanvasLimit = 2048;
+    for (const size of testSizes) {
+        if (testCanvasAllocation(size, size)) {
+            detectedCanvasLimit = size;
             break;
         }
     }
-    document.getElementById('canvasLimitInfo').innerText = `Device canvas limit: ~${detectedMax}px`;
+
+    const infoEl = document.getElementById('canvasLimitInfo');
+    if (infoEl) {
+        infoEl.innerText = `Hardware: ~${detectedCanvasLimit}px canvas limit • Max GPU Texture: ${maxGpuTextureSize}px`;
+    }
+}
+
+function testCanvasAllocation(w, h) {
+    try {
+        const c = document.createElement('canvas');
+        c.width = w;
+        c.height = h;
+        const ctx = c.getContext('2d');
+        if (!ctx) return false;
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, 1, 1);
+        const probe = ctx.getImageData(0, 0, 1, 1);
+        return probe && probe.data.length === 4;
+    } catch (e) {
+        return false;
+    }
 }
 
 function checkResolutionSupport() {
@@ -1107,112 +1407,122 @@ function checkResolutionSupport() {
     const h = parseInt(document.getElementById('texHeight').value) || 256;
     const banner = document.getElementById('hwWarningBanner');
     const genBtn = document.getElementById('generateBtn');
-    
-    const supported = probeMaxCanvasSize(w, h);
-    if (!supported) {
-        let suggestedFallback = "Square 4K (4096x4096)";
-        if (detectedMax >= 16384) suggestedFallback = "Square 16K (16384x16384)";
-        else if (detectedMax >= 8192) suggestedFallback = "Square 8K (8192x8192)";
-        else if (detectedMax < 4096) suggestedFallback = "Square 2K (2048x2048)";
-        
-        banner.innerHTML = `⚠️ Your browser or GPU does not support [${w}x${h}] canvas allocation. Maximum stable resolution on this device is approximately [${detectedMax}px]. Consider selecting ${suggestedFallback}.`;
+
+    if (!testCanvasAllocation(w, h)) {
+        let suggested = detectedCanvasLimit >= 4096 ? "4096×4096 (4K)" : "2048×2048 (2K)";
+        banner.innerHTML = `⚠️ Your browser cannot allocate [${w}×${h}] canvas buffer safely.<br>Maximum stable dimension is ~[${detectedCanvasLimit}px]. Recommended: ${suggested}.`;
         banner.style.display = 'block';
-        
         genBtn.disabled = true;
-        genBtn.innerText = "Resolution Unsupported";
-        genBtn.style.backgroundColor = "#555";
-        genBtn.style.cursor = "not-allowed";
+        genBtn.innerText = 'Resolution Unsupported';
+        genBtn.style.backgroundColor = '#555';
+        genBtn.style.cursor = 'not-allowed';
         return false;
     } else {
         banner.style.display = 'none';
         genBtn.disabled = false;
-        genBtn.innerText = "Force Render";
-        genBtn.style.backgroundColor = "";
-        genBtn.style.cursor = "";
+        genBtn.innerText = '⚡ Force Render';
+        genBtn.style.backgroundColor = '';
+        genBtn.style.cursor = '';
         return true;
     }
 }
 
-// --- 2. THREE.JS VIEWPORT CONTROLLER ---
-
+// --- 3. THREE.JS 3D VIEWPORT CONTROLLER ---
 class ThreeController {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
+        this.isAvailable = typeof THREE !== 'undefined' && typeof THREE.OrbitControls !== 'undefined';
+        
+        if (!this.isAvailable) {
+            const offline = document.getElementById('threeOfflineNotice');
+            if (offline) offline.style.display = 'block';
+            return;
+        }
+
+        this.uvRepeat = 2;
+        this.autoRotate = true;
+        this.rotateSpeed = 0.003;
+        this.currentChannel = 'lit';
+
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x1a1a1a);
-        
-        this.camera = new THREE.PerspectiveCamera(45, this.container.clientWidth / this.container.clientHeight, 0.1, 1000);
-        this.camera.position.set(2, 1.5, 2);
-        
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+        this.scene.background = new THREE.Color(0x111111);
+
+        const w = Math.max(10, this.container.clientWidth);
+        const h = Math.max(10, this.container.clientHeight);
+        this.camera = new THREE.PerspectiveCamera(45, w / h, 0.1, 1000);
+        this.camera.position.set(2.2, 1.6, 2.2);
+
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        this.renderer.setSize(w, h);
+        this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         this.renderer.shadowMap.enabled = true;
         this.container.appendChild(this.renderer.domElement);
-        
+
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
 
-        const ambient = new THREE.AmbientLight(0xffffff, 0.3);
-        const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        dirLight.position.set(5, 10, 7);
-        const backLight = new THREE.DirectionalLight(0xabcdef, 0.4);
-        backLight.position.set(-5, -10, -7);
-        const fillLight = new THREE.DirectionalLight(0xffccaa, 0.3);
-        fillLight.position.set(5, 0, -5);
-        this.scene.add(ambient, dirLight, backLight, fillLight);
+        // Lighting Rig
+        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
+        keyLight.position.set(5, 10, 7);
+        const rimLight = new THREE.DirectionalLight(0x70a0ff, 0.45);
+        rimLight.position.set(-6, -8, -6);
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.35);
+        fillLight.position.set(6, 0, -5);
+        this.scene.add(ambient, keyLight, rimLight, fillLight);
 
-        const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+        const gridHelper = new THREE.GridHelper(10, 10, 0x333333, 0x222222);
+        gridHelper.position.y = -0.7;
         this.scene.add(gridHelper);
 
         this.mesh = null;
+        this.currentMeshType = 'sphere';
 
-        this.currentTexture = new THREE.CanvasTexture(state.canvas);
-        this.currentTexture.wrapS = THREE.RepeatWrapping;
-        this.currentTexture.wrapT = THREE.RepeatWrapping;
-        this.currentTexture.repeat.set(2, 2);
-
-        this.material = new THREE.MeshStandardMaterial({ 
+        // PBR Material Setup
+        this.material = new THREE.MeshStandardMaterial({
             color: 0xffffff,
-            map: this.currentTexture,
-            normalMap: null,
             roughness: 0.6,
             metalness: 0.1,
             side: THREE.DoubleSide
         });
 
         this.initGeometries();
-        this.setMesh('block');
+        this.setMesh('sphere');
         this.animate();
 
         window.addEventListener('resize', () => {
-             this.camera.aspect = this.container.clientWidth / this.container.clientHeight;
-             this.camera.updateProjectionMatrix();
-             this.renderer.setSize(this.container.clientWidth, this.container.clientHeight);
+            if (!this.container) return;
+            const cw = Math.max(10, this.container.clientWidth);
+            const ch = Math.max(10, this.container.clientHeight);
+            this.camera.aspect = cw / ch;
+            this.camera.updateProjectionMatrix();
+            this.renderer.setSize(cw, ch);
         });
     }
 
     initGeometries() {
         this.geometries = {};
-        this.geometries.block = new THREE.BoxGeometry(1, 1, 1, 16, 16, 16);
-        this.geometries.sphere = new THREE.SphereGeometry(0.6, 64, 64);
-        this.geometries.cylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 64, 16);
-        this.geometries.torus = new THREE.TorusGeometry(0.4, 0.15, 32, 100);
-        this.geometries.plane = new THREE.PlaneGeometry(1.5, 1.5, 32, 32);
-        this.geometries.cone = new THREE.ConeGeometry(0.5, 1, 64);
-        this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.6, 16);
+        this.geometries.block = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
+        this.geometries.sphere = new THREE.SphereGeometry(0.65, 64, 64);
+        this.geometries.cylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 64, 32);
+        this.geometries.torus = new THREE.TorusGeometry(0.42, 0.16, 32, 100);
+        this.geometries.plane = new THREE.PlaneGeometry(1.6, 1.6, 64, 64);
+        this.geometries.cone = new THREE.ConeGeometry(0.5, 1, 64, 32);
+        this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.65, 16);
+        this.geometries.torusKnot = new THREE.TorusKnotGeometry(0.38, 0.13, 120, 20);
 
-        // Buffer geometry configurations for wedges
+        // Accurate Wedge Geometry with UVs & computed Normals
         const wedgeGeo = new THREE.BufferGeometry();
-        const wedgeVertices = new Float32Array([
-            -0.5, -0.5, 0.5,   0.5, -0.5, 0.5,  -0.5, -0.5, -0.5, 
-            0.5, -0.5, 0.5,   0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
+        const wedgeVerts = new Float32Array([
+            -0.5, -0.5, 0.5,   0.5, -0.5, 0.5,  -0.5, -0.5, -0.5,
+             0.5, -0.5, 0.5,   0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
             -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
-            0.5, -0.5, -0.5,   0.5, 0.5, -0.5,   -0.5, 0.5, -0.5,
+             0.5, -0.5, -0.5,   0.5, 0.5, -0.5,   -0.5, 0.5, -0.5,
             -0.5, -0.5, 0.5,   -0.5, 0.5, -0.5,   0.5, -0.5, 0.5,
-            0.5, -0.5, 0.5,    -0.5, 0.5, -0.5,   0.5, 0.5, -0.5,
+             0.5, -0.5, 0.5,    -0.5, 0.5, -0.5,   0.5, 0.5, -0.5,
             -0.5, -0.5, 0.5,   -0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
-            0.5, -0.5, 0.5,    0.5, 0.5, -0.5,    0.5, -0.5, -0.5
+             0.5, -0.5, 0.5,    0.5, 0.5, -0.5,    0.5, -0.5, -0.5
         ]);
         const wedgeUVs = new Float32Array([
             0,1, 1,1, 0,0,  1,1, 1,0, 0,0,
@@ -1220,13 +1530,14 @@ class ThreeController {
             0,0, 0,1, 1,0,  1,0, 0,1, 1,1,
             0,0, 1,0, 1,1,  0,0, 1,1, 0,1
         ]);
-        wedgeGeo.setAttribute('position', new THREE.BufferAttribute(wedgeVertices, 3));
+        wedgeGeo.setAttribute('position', new THREE.BufferAttribute(wedgeVerts, 3));
         wedgeGeo.setAttribute('uv', new THREE.BufferAttribute(wedgeUVs, 2));
         wedgeGeo.computeVertexNormals();
         this.geometries.wedge = wedgeGeo;
 
+        // Accurate Corner Wedge Geometry
         const cornerGeo = new THREE.BufferGeometry();
-        const cornerVertices = new Float32Array([
+        const cornerVerts = new Float32Array([
             -0.5, -0.5, 0.5,  0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
             -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
              -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
@@ -1238,136 +1549,220 @@ class ThreeController {
              0,1, 0,0, 1,0,
              0,0, 0,1, 1,0
         ]);
-        cornerGeo.setAttribute('position', new THREE.BufferAttribute(cornerVertices, 3));
+        cornerGeo.setAttribute('position', new THREE.BufferAttribute(cornerVerts, 3));
         cornerGeo.setAttribute('uv', new THREE.BufferAttribute(cornerUVs, 2));
         cornerGeo.computeVertexNormals();
         this.geometries.cornerWedge = cornerGeo;
     }
 
     setMesh(type) {
-        if(this.mesh) this.scene.remove(this.mesh);
-        this.mesh = new THREE.Mesh(this.geometries[type], this.material);
+        if (!this.isAvailable) return;
+        if (this.mesh) this.scene.remove(this.mesh);
+        this.currentMeshType = type;
+        const geo = this.geometries[type] || this.geometries.sphere;
+        this.mesh = new THREE.Mesh(geo, this.material);
         this.mesh.position.y = 0;
         this.scene.add(this.mesh);
+
+        const badge = document.getElementById('vMeshBadge');
+        if (badge) badge.innerText = type.charAt(0).toUpperCase() + type.slice(1);
     }
 
-    updateMaterial() {
-        if(!this.material) return;
+    setTilingRepeat(repeat) {
+        this.uvRepeat = repeat;
+        const rep = new THREE.Vector2(repeat, repeat);
+        ['map', 'normalMap', 'roughnessMap', 'aoMap', 'displacementMap'].forEach(texKey => {
+            if (this.material && this.material[texKey]) {
+                this.material[texKey].repeat.copy(rep);
+                this.material[texKey].needsUpdate = true;
+            }
+        });
+        const badge = document.getElementById('vTilingBadge');
+        if (badge) badge.innerText = `${repeat}×${repeat} Repeat`;
+    }
+
+    updateMaterialParams() {
+        if (!this.isAvailable || !this.material) return;
         this.material.roughness = parseFloat(document.getElementById('matRoughness').value);
         this.material.metalness = parseFloat(document.getElementById('matMetalness').value);
-        
-        const normScale = parseFloat(document.getElementById('bumpScale').value);
+
+        const bumpDepth = parseFloat(document.getElementById('bumpScale').value);
         if (this.material.normalScale) {
-            this.material.normalScale.set(normScale, normScale);
+            this.material.normalScale.set(bumpDepth, bumpDepth);
+        }
+        
+        const dispScale = parseFloat(document.getElementById('displacementScale').value);
+        this.material.displacementScale = dispScale;
+
+        const aoInt = parseFloat(document.getElementById('aoIntensity').value);
+        this.material.aoMapIntensity = aoInt;
+
+        this.material.needsUpdate = true;
+    }
+
+    applyTexture(canvasSource, mapType = 'diffuse') {
+        if (!this.isAvailable || !canvasSource) return;
+
+        const tex = new THREE.CanvasTexture(canvasSource);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(this.uvRepeat, this.uvRepeat);
+
+        if (mapType === 'diffuse') {
+            if (this.material.map) this.material.map.dispose();
+            this.material.map = tex;
+        } else if (mapType === 'normal') {
+            if (this.material.normalMap) this.material.normalMap.dispose();
+            this.material.normalMap = tex;
+        } else if (mapType === 'roughness') {
+            if (this.material.roughnessMap) this.material.roughnessMap.dispose();
+            this.material.roughnessMap = tex;
+        } else if (mapType === 'height') {
+            if (this.material.displacementMap) this.material.displacementMap.dispose();
+            this.material.displacementMap = tex;
+        } else if (mapType === 'ao') {
+            if (this.material.aoMap) this.material.aoMap.dispose();
+            this.material.aoMap = tex;
         }
         this.material.needsUpdate = true;
     }
 
-    updateTexture(finalCanvas) {
-        const w = state.canvas.width;
-        const h = state.canvas.height;
-        const useProxy = (w > 16384 || h > 16384);
+    updateViewportChannel(channel) {
+        if (!this.isAvailable || !this.material) return;
+        this.currentChannel = channel;
 
-        if (finalCanvas && !useProxy) {
-            const showNormal = document.getElementById('showNormalMapCheckbox').checked;
-            this.currentTexture.image = (showNormal && state.normalCanvas) ? state.normalCanvas : state.canvas;
-            this.currentTexture.needsUpdate = true;
-            
-            if (state.normalCanvas) {
-                if (!this.normalTexture) {
-                    this.normalTexture = new THREE.CanvasTexture(state.normalCanvas);
-                    this.normalTexture.wrapS = THREE.RepeatWrapping;
-                    this.normalTexture.wrapT = THREE.RepeatWrapping;
-                    this.normalTexture.repeat.set(2, 2);
-                } else {
-                    this.normalTexture.image = state.normalCanvas;
-                    this.normalTexture.needsUpdate = true;
-                }
-                this.material.normalMap = this.normalTexture;
-            } else {
-                this.material.normalMap = null;
-            }
-        } else {
-            this.currentTexture.image = proxyCanvas;
-            this.currentTexture.needsUpdate = true;
-            this.material.normalMap = null; 
+        const badge = document.getElementById('vChannelBadge');
+        if (badge) badge.innerText = channel.toUpperCase();
+
+        if (channel === 'lit') {
+            this.material.color.setHex(0xffffff);
+            this.applyTexture(state.canvas, 'diffuse');
+            this.applyTexture(state.normalCanvas, 'normal');
+            this.applyTexture(state.roughnessCanvas, 'roughness');
+            this.applyTexture(state.aoCanvas, 'ao');
+            this.applyTexture(state.heightCanvas, 'height');
+        } else if (channel === 'diffuse') {
+            this.material.normalMap = null;
+            this.material.roughnessMap = null;
+            this.material.aoMap = null;
+            this.material.displacementMap = null;
+            this.applyTexture(state.canvas, 'diffuse');
+        } else if (channel === 'normal') {
+            this.material.normalMap = null;
+            this.material.roughnessMap = null;
+            this.material.aoMap = null;
+            this.material.displacementMap = null;
+            this.applyTexture(state.normalCanvas || state.canvas, 'diffuse');
+        } else if (channel === 'height') {
+            this.material.normalMap = null;
+            this.material.roughnessMap = null;
+            this.material.aoMap = null;
+            this.material.displacementMap = null;
+            this.applyTexture(state.heightCanvas || state.canvas, 'diffuse');
+        } else if (channel === 'roughness') {
+            this.material.normalMap = null;
+            this.material.roughnessMap = null;
+            this.material.aoMap = null;
+            this.material.displacementMap = null;
+            this.applyTexture(state.roughnessCanvas || state.canvas, 'diffuse');
+        } else if (channel === 'ao') {
+            this.material.normalMap = null;
+            this.material.roughnessMap = null;
+            this.material.aoMap = null;
+            this.material.displacementMap = null;
+            this.applyTexture(state.aoCanvas || state.canvas, 'diffuse');
         }
-        this.updateMaterial();
+        this.updateMaterialParams();
+    }
+
+    resetCamera() {
+        if (!this.isAvailable) return;
+        this.camera.position.set(2.2, 1.6, 2.2);
+        this.controls.target.set(0, 0, 0);
+        this.controls.update();
     }
 
     animate() {
+        if (!this.isAvailable) return;
         requestAnimationFrame(() => this.animate());
-        if(this.mesh) this.mesh.rotation.y += 0.002;
+        if (this.autoRotate && this.mesh) {
+            this.mesh.rotation.y += this.rotateSpeed;
+        }
         this.controls.update();
         this.renderer.render(this.scene, this.camera);
     }
 }
 
-// --- 3. APP STATE & INITIALIZATION ---
-
+// --- 4. APP STATE & INITIALIZATION ---
 const state = {
-    // Infinite Gradient Stop list initialized with rich stops
+    canvas: null,
+    normalCanvas: null,
+    heightCanvas: null,
+    roughnessCanvas: null,
+    aoCanvas: null,
+    inputs: {},
+    uploadedImage: null,
+    currentViewMap: 'diffuse',
+    rawHeights: null,
     gradientStops: [
         { pos: 0.0, color: "#1a0500" },
         { pos: 0.25, color: "#7a1200" },
         { pos: 0.5, color: "#e03000" },
         { pos: 0.75, color: "#ff8c00" },
         { pos: 1.0, color: "#ffe066" }
-    ],
-    canvas: null,
-    normalCanvas: null,
-    inputs: {},
-    uploadedImage: null
+    ]
 };
 
 let ctx = null;
-let threeView = null; 
-let isRendering = false; 
-let activeWorkers = []; 
-
+let threeView = null;
+let isRendering = false;
+let activeWorkers = [];
+let currentRenderId = 0;
 let proxyCanvas = null;
 let proxyCtx = null;
 
 function init() {
     state.canvas = document.getElementById('textureCanvas');
     ctx = state.canvas.getContext('2d', { willReadFrequently: true });
-    
+
     proxyCanvas = document.createElement('canvas');
     proxyCanvas.width = 512;
     proxyCanvas.height = 512;
     proxyCtx = proxyCanvas.getContext('2d');
-    
-    detectLimit();
+
+    detectHardwareCapabilities();
     threeView = new ThreeController('threeContainer');
 
-    const ids = [
-        'texWidth', 'texHeight', 'seed', 'noiseType', 'scale', 'octaves', 
-        'persistence', 'lacunarity', 'ridged', 
+    const inputIds = [
+        'texWidth', 'texHeight', 'seed', 'noiseType', 'scale', 'octaves',
+        'persistence', 'lacunarity', 'ridged',
         'turbStrength', 'turbScale', 'worleyType', 'worleyDist',
         'contrast', 'brightness', 'invert', 'thresholdEnable', 'threshold',
-        'bumpScale', 'matRoughness', 'matMetalness',
-        'normalStrength'
+        'bumpScale', 'displacementScale', 'matRoughness', 'matMetalness', 'aoIntensity',
+        'normalStrength', 'directXNormalCheckbox', 'seamlessTilingCheckbox',
+        'seamlessBlendUpload'
     ];
-    
-    ids.forEach(id => {
+
+    inputIds.forEach(id => {
         const el = document.getElementById(id);
-        if(!el) return;
+        if (!el) return;
         state.inputs[id] = el;
-        
+
         el.addEventListener('input', (e) => {
-            if(id === 'texWidth' || id === 'texHeight') {
+            if (id === 'texWidth' || id === 'texHeight') {
                 document.getElementById('resPreset').value = 'custom';
                 checkResolutionSupport();
             }
-            if(el.type === 'range') updateValueLabel(id, e.target.value);
-
+            if (el.type === 'range') updateValueLabel(id, e.target.value);
             document.getElementById('presetSelect').value = 'custom';
-            if (['matRoughness', 'matMetalness', 'bumpScale'].includes(id)) {
-                threeView.updateMaterial();
-            } else if (id === 'normalStrength') {
+
+            if (['matRoughness', 'matMetalness', 'bumpScale', 'displacementScale', 'aoIntensity'].includes(id)) {
+                if (threeView) threeView.updateMaterialParams();
+            } else if (id === 'normalStrength' || id === 'directXNormalCheckbox') {
                 if (!isRendering) {
-                    generateNormalMap();
-                    threeView.updateTexture(state.canvas);
+                    generateAllPbrMaps();
+                    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+                    render2DCanvasView();
                 }
             } else {
                 debouncedGenerate();
@@ -1375,11 +1770,11 @@ function init() {
         });
     });
 
-    const resPreset = document.getElementById('resPreset');
-    resPreset.addEventListener('change', (e) => {
+    // Resolution Presets
+    document.getElementById('resPreset').addEventListener('change', (e) => {
         const val = e.target.value;
-        if(val !== 'custom') {
-            const[w, h] = val.split('x').map(Number);
+        if (val !== 'custom') {
+            const [w, h] = val.split('x').map(Number);
             document.getElementById('texWidth').value = w;
             document.getElementById('texHeight').value = h;
             checkResolutionSupport();
@@ -1387,36 +1782,41 @@ function init() {
         }
     });
 
-    document.getElementById('imageInput').addEventListener('change', handleImageUpload);
-    document.getElementById('clearImageBtn').addEventListener('click', clearImageUpload);
-
+    // Buttons & Actions
     document.getElementById('generateBtn').addEventListener('click', generateTexture);
-    document.getElementById('randomBtn').addEventListener('click', randomize);
-    document.getElementById('downloadBtn').addEventListener('click', download);
-    document.getElementById('downloadNormalBtn').addEventListener('click', downloadNormal);
-    
+    document.getElementById('randomBtn').addEventListener('click', randomizeAll);
     document.getElementById('newSeedBtn').addEventListener('click', () => {
         state.inputs.seed.value = Math.floor(Math.random() * 99999);
         generateTexture();
     });
-    
-    // --- Gradient Engine Event Listeners ---
-    document.getElementById('addStopBtn').addEventListener('click', () => {
-        addGradientStop(0.5, "#3498db");
-    });
-    
+
+    // Image Upload & Clear
+    document.getElementById('imageInput').addEventListener('change', handleImageUpload);
+    document.getElementById('clearImageBtn').addEventListener('click', clearImageUpload);
+
+    // 2D Map Downloads
+    document.getElementById('downloadCurrentBtn').addEventListener('click', downloadCurrentViewMap);
+    document.getElementById('downloadAllPbrBtn').addEventListener('click', downloadAllPbrMaps);
+
+    // Preset Import/Export
+    document.getElementById('exportPresetBtn').addEventListener('click', exportPresetJSON);
+    document.getElementById('importPresetBtn').addEventListener('click', () => document.getElementById('presetFileInput').click());
+    document.getElementById('presetFileInput').addEventListener('change', importPresetJSON);
+    document.getElementById('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
+
+    // Gradient Controls
+    document.getElementById('addStopBtn').addEventListener('click', () => addGradientStop(0.5, "#3498db"));
     document.getElementById('distributeStopsBtn').addEventListener('click', distributeStopsEvenly);
     document.getElementById('reverseGradientBtn').addEventListener('click', reverseGradient);
     document.getElementById('randomGradientBtn').addEventListener('click', randomizeGradientOnly);
-    
     document.getElementById('quickPaletteSelect').addEventListener('change', (e) => {
-        if(e.target.value) {
+        if (e.target.value) {
             loadQuickPalette(e.target.value);
             e.target.value = "";
         }
     });
 
-    // Click anywhere on preview bar to insert color stop at exact position & sampled color
+    // Interactive Bar Stop Insertion
     document.getElementById('gradient-preview').addEventListener('click', (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const clickPos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -1424,15 +1824,47 @@ function init() {
         addGradientStop(parseFloat(clickPos.toFixed(3)), sampledColor);
     });
 
-    document.getElementById('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
-    
-    document.getElementById('meshSelect').addEventListener('change', (e) => {
-        threeView.setMesh(e.target.value);
+    // 3D Viewport Controls
+    document.getElementById('viewportChannel').addEventListener('change', (e) => {
+        if (threeView) threeView.updateViewportChannel(e.target.value);
     });
-    
-    document.getElementById('showNormalMapCheckbox').addEventListener('change', () => {
-        if (!isRendering) {
-            threeView.updateTexture(state.canvas);
+    document.getElementById('meshSelect').addEventListener('change', (e) => {
+        if (threeView) threeView.setMesh(e.target.value);
+    });
+    document.getElementById('tilingRepeatSelect').addEventListener('change', (e) => {
+        if (threeView) threeView.setTilingRepeat(parseInt(e.target.value));
+    });
+    document.getElementById('toggleRotateBtn').addEventListener('click', () => {
+        if (!threeView) return;
+        threeView.autoRotate = !threeView.autoRotate;
+        document.getElementById('toggleRotateBtn').innerText = threeView.autoRotate ? '⏸' : '▶';
+    });
+    document.getElementById('toggleWireframeBtn').addEventListener('click', () => {
+        if (!threeView || !threeView.material) return;
+        threeView.material.wireframe = !threeView.material.wireframe;
+    });
+    document.getElementById('resetCameraBtn').addEventListener('click', () => {
+        if (threeView) threeView.resetCamera();
+    });
+
+    // 2D Channel Switcher Pills
+    document.querySelectorAll('.channel-pill').forEach(pill => {
+        pill.addEventListener('click', (e) => {
+            document.querySelectorAll('.channel-pill').forEach(p => p.classList.remove('active'));
+            e.currentTarget.classList.add('active');
+            state.currentViewMap = e.currentTarget.getAttribute('data-map');
+            render2DCanvasView();
+        });
+    });
+
+    // Keyboard Shortcuts
+    window.addEventListener('keydown', (e) => {
+        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        if (e.code === 'KeyR') {
+            randomizeAll();
+        } else if (e.code === 'Space') {
+            e.preventDefault();
+            generateTexture();
         }
     });
 
@@ -1441,11 +1873,21 @@ function init() {
     generateTexture();
 }
 
-// --- 4. IMAGE UPLOAD HANDLERS ---
+function updateValueLabel(id, val) {
+    const el = document.getElementById(id + 'Val');
+    if (el) el.innerText = val;
+}
 
+let debounceTimer = null;
+function debouncedGenerate() {
+    clearTimeout(debounceTimer);
+    debounceTimer = setTimeout(generateTexture, 130);
+}
+
+// --- 5. IMAGE UPLOAD & SEAMLESS EDGE BLENDING ---
 function handleImageUpload(e) {
     const file = e.target.files[0];
-    if(!file) return;
+    if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
@@ -1467,40 +1909,52 @@ function clearImageUpload() {
     generateTexture();
 }
 
-function updateValueLabel(id, val) {
-    const labelEl = document.getElementById(id + 'Val');
-    if(labelEl) labelEl.innerText = val;
+function applySeamlessEdgeBlend(sourceCanvas) {
+    const w = sourceCanvas.width;
+    const h = sourceCanvas.height;
+    const sCtx = sourceCanvas.getContext('2d');
+    const imgData = sCtx.getImageData(0, 0, w, h);
+    const src = imgData.data;
+
+    const blendW = Math.floor(w * 0.15);
+    const blendH = Math.floor(h * 0.15);
+
+    for (let y = 0; y < h; y++) {
+        for (let x = 0; x < blendW; x++) {
+            const factor = 0.5 * (1.0 - Math.cos((x / blendW) * Math.PI));
+            const leftIdx = (y * w + x) * 4;
+            const rightIdx = (y * w + (w - 1 - x)) * 4;
+
+            for (let c = 0; c < 3; c++) {
+                const blended = src[leftIdx + c] * factor + src[rightIdx + c] * (1.0 - factor);
+                src[leftIdx + c] = Math.round(blended);
+            }
+        }
+    }
+
+    for (let x = 0; x < w; x++) {
+        for (let y = 0; y < blendH; y++) {
+            const factor = 0.5 * (1.0 - Math.cos((y / blendH) * Math.PI));
+            const topIdx = (y * w + x) * 4;
+            const botIdx = ((h - 1 - y) * w + x) * 4;
+
+            for (let c = 0; c < 3; c++) {
+                const blended = src[topIdx + c] * factor + src[botIdx + c] * (1.0 - factor);
+                src[topIdx + c] = Math.round(blended);
+            }
+        }
+    }
+    sCtx.putImageData(imgData, 0, 0);
 }
 
-let debounceTimer;
-function debouncedGenerate() {
-    clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(generateTexture, 150);
-}
-
-// --- 5. INFINITE GRADIENT COLOR STOP ENGINE ---
-
-function hexToRgb(hex) {
-    if(!hex) return [0,0,0];
-    const shorthandRegex = /^#?([a-f\d])([a-f\d])([a-f\d])$/i;
-    const fullHex = hex.replace(shorthandRegex, (m, r, g, b) => r + r + g + g + b + b);
-    const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(fullHex);
-    return result ? [parseInt(result[1], 16), parseInt(result[2], 16), parseInt(result[3], 16)] : [0, 0, 0];
-}
-
-function rgbToHex(r, g, b) {
-    return "#" + [r, g, b].map(x => {
-        const hex = Math.max(0, Math.min(255, Math.round(x))).toString(16);
-        return hex.length === 1 ? '0' + hex : hex;
-    }).join('');
-}
-
+// --- 6. INFINITE GRADIENT COLOR ENGINE ---
 function sampleColorAtPos(t) {
     const sorted = [...state.gradientStops].sort((a, b) => a.pos - b.pos);
     if (sorted.length === 0) return "#ffffff";
     if (sorted.length === 1) return sorted[0].color;
     if (t <= sorted[0].pos) return sorted[0].color;
     if (t >= sorted[sorted.length - 1].pos) return sorted[sorted.length - 1].color;
+
     for (let i = 0; i < sorted.length - 1; i++) {
         if (t >= sorted[i].pos && t <= sorted[i + 1].pos) {
             const range = sorted[i + 1].pos - sorted[i].pos;
@@ -1517,20 +1971,50 @@ function sampleColorAtPos(t) {
     return sorted[sorted.length - 1].color;
 }
 
+function hexToRgb(hex) {
+    if (!hex || typeof hex !== 'string') return [0, 0, 0];
+    const clean = hex.trim().replace(/^#/, '');
+    if (clean.length === 3) {
+        return [
+            parseInt(clean[0] + clean[0], 16) || 0,
+            parseInt(clean[1] + clean[1], 16) || 0,
+            parseInt(clean[2] + clean[2], 16) || 0
+        ];
+    }
+    if (clean.length >= 6) {
+        return [
+            parseInt(clean.substring(0, 2), 16) || 0,
+            parseInt(clean.substring(2, 4), 16) || 0,
+            parseInt(clean.substring(4, 6), 16) || 0
+        ];
+    }
+    return [0, 0, 0];
+}
+
+function rgbToHex(r, g, b) {
+    return "#" + [r, g, b].map(x => {
+        const hex = Math.max(0, Math.min(255, Math.round(x))).toString(16);
+        return hex.length === 1 ? '0' + hex : hex;
+    }).join('');
+}
+
 function addGradientStop(pos, color) {
     state.gradientStops.push({ pos: Math.max(0, Math.min(1, pos)), color });
     renderGradientUI();
     debouncedGenerate();
 }
 
-function removeGradientStop(index) {
+function removeGradientStopByRef(stopRef) {
     if (state.gradientStops.length <= 1) {
-        alert("You must have at least 1 color stop.");
+        alert("You must retain at least 1 color stop.");
         return;
     }
-    state.gradientStops.splice(index, 1);
-    renderGradientUI();
-    debouncedGenerate();
+    const idx = state.gradientStops.indexOf(stopRef);
+    if (idx !== -1) {
+        state.gradientStops.splice(idx, 1);
+        renderGradientUI();
+        debouncedGenerate();
+    }
 }
 
 function distributeStopsEvenly() {
@@ -1554,9 +2038,9 @@ function reverseGradient() {
 
 function randomizeGradientOnly() {
     const r = Math.random;
-    const numStops = Math.floor(2 + r() * 5); // 2 to 6 stops
+    const numStops = Math.floor(2 + r() * 5);
     const newStops = [];
-    for(let i = 0; i < numStops; i++) {
+    for (let i = 0; i < numStops; i++) {
         const pos = i === 0 ? 0.0 : (i === numStops - 1 ? 1.0 : parseFloat(r().toFixed(2)));
         const color = '#' + Math.floor(r() * 16777215).toString(16).padStart(6, '0');
         newStops.push({ pos, color });
@@ -1569,80 +2053,65 @@ function randomizeGradientOnly() {
 const quickPalettes = {
     bw: [{ pos: 0.0, color: "#000000" }, { pos: 1.0, color: "#ffffff" }],
     fire: [
-        { pos: 0.0, color: "#000000" },
-        { pos: 0.18, color: "#590202" },
-        { pos: 0.42, color: "#c41e00" },
-        { pos: 0.68, color: "#ff7b00" },
-        { pos: 0.88, color: "#ffea00" },
-        { pos: 1.0, color: "#ffffff" }
+        { pos: 0.0, color: "#000000" }, { pos: 0.18, color: "#590202" },
+        { pos: 0.42, color: "#c41e00" }, { pos: 0.68, color: "#ff7b00" },
+        { pos: 0.88, color: "#ffea00" }, { pos: 1.0, color: "#ffffff" }
     ],
     rainbow: [
-        { pos: 0.0, color: "#ff0000" },
-        { pos: 0.17, color: "#ff7f00" },
-        { pos: 0.33, color: "#ffff00" },
-        { pos: 0.5, color: "#00ff00" },
-        { pos: 0.67, color: "#0088ff" },
-        { pos: 0.83, color: "#4b0082" },
+        { pos: 0.0, color: "#ff0000" }, { pos: 0.17, color: "#ff7f00" },
+        { pos: 0.33, color: "#ffff00" }, { pos: 0.5, color: "#00ff00" },
+        { pos: 0.67, color: "#0088ff" }, { pos: 0.83, color: "#4b0082" },
         { pos: 1.0, color: "#9400d3" }
     ],
     cyberpunk: [
-        { pos: 0.0, color: "#0a0017" },
-        { pos: 0.28, color: "#54007a" },
-        { pos: 0.52, color: "#d60074" },
-        { pos: 0.78, color: "#00e5ff" },
+        { pos: 0.0, color: "#0a0017" }, { pos: 0.28, color: "#54007a" },
+        { pos: 0.52, color: "#d60074" }, { pos: 0.78, color: "#00e5ff" },
         { pos: 1.0, color: "#ffffff" }
     ],
     ocean: [
-        { pos: 0.0, color: "#010b14" },
-        { pos: 0.25, color: "#002a4a" },
-        { pos: 0.5, color: "#005f73" },
-        { pos: 0.75, color: "#0a9396" },
-        { pos: 0.9, color: "#94d2bd" },
-        { pos: 1.0, color: "#e9d8a6" }
+        { pos: 0.0, color: "#010b14" }, { pos: 0.25, color: "#002a4a" },
+        { pos: 0.5, color: "#005f73" }, { pos: 0.75, color: "#0a9396" },
+        { pos: 0.9, color: "#94d2bd" }, { pos: 1.0, color: "#e9d8a6" }
     ],
     forest: [
-        { pos: 0.0, color: "#0b1709" },
-        { pos: 0.22, color: "#1b3a16" },
-        { pos: 0.48, color: "#2d6a4f" },
-        { pos: 0.72, color: "#52b788" },
-        { pos: 0.88, color: "#b7e4c7" },
-        { pos: 1.0, color: "#ffffff" }
+        { pos: 0.0, color: "#0b1709" }, { pos: 0.22, color: "#1b3a16" },
+        { pos: 0.48, color: "#2d6a4f" }, { pos: 0.72, color: "#52b788" },
+        { pos: 0.88, color: "#b7e4c7" }, { pos: 1.0, color: "#ffffff" }
     ],
     sunset: [
-        { pos: 0.0, color: "#14012b" },
-        { pos: 0.22, color: "#4d1045" },
-        { pos: 0.48, color: "#9e2a2b" },
-        { pos: 0.74, color: "#e07a5f" },
-        { pos: 0.9, color: "#f4a261" },
-        { pos: 1.0, color: "#fff3b0" }
+        { pos: 0.0, color: "#14012b" }, { pos: 0.22, color: "#4d1045" },
+        { pos: 0.48, color: "#9e2a2b" }, { pos: 0.74, color: "#e07a5f" },
+        { pos: 0.9, color: "#f4a261" }, { pos: 1.0, color: "#fff3b0" }
     ],
     gold: [
-        { pos: 0.0, color: "#140e07" },
-        { pos: 0.22, color: "#4a3311" },
-        { pos: 0.48, color: "#9c7a28" },
-        { pos: 0.74, color: "#e0b848" },
-        { pos: 0.9, color: "#fef3c7" },
-        { pos: 1.0, color: "#ffffff" }
+        { pos: 0.0, color: "#140e07" }, { pos: 0.22, color: "#4a3311" },
+        { pos: 0.48, color: "#9c7a28" }, { pos: 0.74, color: "#e0b848" },
+        { pos: 0.9, color: "#fef3c7" }, { pos: 1.0, color: "#ffffff" }
     ],
     toxic: [
-        { pos: 0.0, color: "#020f02" },
-        { pos: 0.28, color: "#0f3d0f" },
-        { pos: 0.55, color: "#38b000" },
-        { pos: 0.82, color: "#ccff33" },
+        { pos: 0.0, color: "#020f02" }, { pos: 0.28, color: "#0f3d0f" },
+        { pos: 0.55, color: "#38b000" }, { pos: 0.82, color: "#ccff33" },
         { pos: 1.0, color: "#ffffff" }
     ],
     hologram: [
-        { pos: 0.0, color: "#1f003b" },
-        { pos: 0.2, color: "#005577" },
-        { pos: 0.4, color: "#00c9a7" },
-        { pos: 0.6, color: "#845ec2" },
-        { pos: 0.8, color: "#ff6f91" },
-        { pos: 1.0, color: "#ffc75f" }
+        { pos: 0.0, color: "#1f003b" }, { pos: 0.2, color: "#005577" },
+        { pos: 0.4, color: "#00c9a7" }, { pos: 0.6, color: "#845ec2" },
+        { pos: 0.8, color: "#ff6f91" }, { pos: 1.0, color: "#ffc75f" }
+    ],
+    marble: [
+        { pos: 0.0, color: "#111111" }, { pos: 0.15, color: "#333333" },
+        { pos: 0.4, color: "#777777" }, { pos: 0.75, color: "#d0d0d0" },
+        { pos: 1.0, color: "#ffffff" }
+    ],
+    sand: [
+        { pos: 0.0, color: "#543008" }, { pos: 0.25, color: "#8c561b" },
+        { pos: 0.55, color: "#c98f49" }, { pos: 0.8, color: "#e6be7e" },
+        { pos: 1.0, color: "#f5e4c6" }
     ]
 };
 
 function loadQuickPalette(name) {
-    if(!quickPalettes[name]) return;
+    if (!quickPalettes[name]) return;
     state.gradientStops = JSON.parse(JSON.stringify(quickPalettes[name]));
     renderGradientUI();
     debouncedGenerate();
@@ -1651,34 +2120,31 @@ function loadQuickPalette(name) {
 function renderGradientUI() {
     const list = document.getElementById('gradient-stops-list');
     list.innerHTML = '';
-    
-    // Sort array by position
     state.gradientStops.sort((a, b) => a.pos - b.pos);
-    
-    state.gradientStops.forEach((stop, index) => {
+
+    state.gradientStops.forEach((stop) => {
         const item = document.createElement('div');
         item.className = 'gradient-stop-item';
-        
         const isOnlyStop = state.gradientStops.length <= 1;
-        
+
         item.innerHTML = `
             <input type="color" value="${stop.color}" class="stop-color" title="Pick Stop Color">
             <input type="range" min="0" max="1" step="0.01" value="${stop.pos}" class="stop-slider" title="Drag Stop Position">
             <input type="number" min="0" max="1" step="0.01" value="${stop.pos}" class="stop-num" title="Exact Position (0.0 - 1.0)">
             <button class="remove-stop-btn" ${isOnlyStop ? 'disabled' : ''} title="Delete Stop">×</button>
         `;
-        
+
         const colInput = item.querySelector('.stop-color');
         const sliderInput = item.querySelector('.stop-slider');
         const numInput = item.querySelector('.stop-num');
         const removeBtn = item.querySelector('.remove-stop-btn');
-        
+
         colInput.addEventListener('input', (e) => {
             stop.color = e.target.value;
             updateGradientPreview();
             debouncedGenerate();
         });
-        
+
         sliderInput.addEventListener('input', (e) => {
             const val = parseFloat(e.target.value);
             stop.pos = val;
@@ -1686,7 +2152,7 @@ function renderGradientUI() {
             updateGradientPreview();
             debouncedGenerate();
         });
-        
+
         numInput.addEventListener('change', (e) => {
             let val = parseFloat(e.target.value);
             if (isNaN(val)) val = 0;
@@ -1697,14 +2163,14 @@ function renderGradientUI() {
             renderGradientUI();
             debouncedGenerate();
         });
-        
+
         removeBtn.addEventListener('click', () => {
-            removeGradientStop(index);
+            removeGradientStopByRef(stop);
         });
-        
+
         list.appendChild(item);
     });
-    
+
     updateGradientPreview();
 }
 
@@ -1719,81 +2185,170 @@ function updateGradientPreview() {
     document.getElementById('gradient-preview').style.background = `linear-gradient(to right, ${css})`;
 }
 
-// --- 6. NORMAL MAP SOBEL FILTER PASS ---
-
-function generateNormalMap() {
+// --- 7. FAST PBR MAP FILTERS (SOBEL NORMAL, HEIGHT, ROUGHNESS, AO) ---
+function generateAllPbrMaps() {
     const w = state.canvas.width;
     const h = state.canvas.height;
-    
-    if (w * h > 16384 * 16384) {
-        console.warn("Resolutions higher than 16K bypass the normal map pass to prevent RAM allocation crashes.");
-        state.normalCanvas = null;
-        return;
+    if (w * h === 0) return;
+
+    // 1. Height Map
+    let heightArr = state.rawHeights;
+    if (!heightArr || heightArr.length !== w * h) {
+        heightArr = new Float32Array(w * h);
+        const img = ctx.getImageData(0, 0, w, h).data;
+        for (let i = 0; i < w * h; i++) {
+            const idx = i * 4;
+            heightArr[i] = (0.299 * img[idx] + 0.587 * img[idx + 1] + 0.114 * img[idx + 2]) / 255.0;
+        }
+        state.rawHeights = heightArr;
     }
 
-    try {
-        const normalCanvas = state.normalCanvas || document.createElement('canvas');
-        normalCanvas.width = w;
-        normalCanvas.height = h;
-        const normalCtx = normalCanvas.getContext('2d');
-        
-        const imgData = ctx.getImageData(0, 0, w, h);
-        const src = imgData.data;
-        const normalImgData = normalCtx.createImageData(w, h);
-        const dst = normalImgData.data;
-        
-        const strength = parseFloat(document.getElementById('normalStrength').value || 3.0);
-        
-        const getLuminance = (x, y) => {
-            const cx = Math.max(0, Math.min(w - 1, x));
-            const cy = Math.max(0, Math.min(h - 1, y));
-            const idx = (cy * w + cx) * 4;
-            return (0.299 * src[idx] + 0.587 * src[idx + 1] + 0.114 * src[idx + 2]) / 255.0;
-        };
-        
-        for (let y = 0; y < h; y++) {
-            for (let x = 0; x < w; x++) {
-                const l00 = getLuminance(x - 1, y - 1);
-                const l10 = getLuminance(x,     y - 1);
-                const l20 = getLuminance(x + 1, y - 1);
-                
-                const l01 = getLuminance(x - 1, y);
-                const l21 = getLuminance(x + 1, y);
-                
-                const l02 = getLuminance(x - 1, y + 1);
-                const l12 = getLuminance(x,     y + 1);
-                const l22 = getLuminance(x + 1, y + 1);
-                
-                const dX = ((-1 * l00) + (1 * l20) + (-2 * l01) + (2 * l21) + (-1 * l02) + (1 * l22));
-                const dY = ((-1 * l00) + (-2 * l10) + (-1 * l20) + (1 * l02) + (2 * l12) + (1 * l22));
-                
-                const nx = -dX * strength;
-                const ny = -dY * strength;
-                const nz = 1.0;
-                
-                const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-                const nX_norm = nx / len;
-                const nY_norm = ny / len;
-                const nZ_norm = nz / len;
-                
-                const idx = (y * w + x) * 4;
-                dst[idx]     = Math.floor((nX_norm + 1.0) / 2.0 * 255.0);
-                dst[idx + 1] = Math.floor((nY_norm + 1.0) / 2.0 * 255.0);
-                dst[idx + 2] = Math.floor((nZ_norm + 1.0) / 2.0 * 255.0);
-                dst[idx + 3] = 255;
-            }
-        }
-        
-        normalCtx.putImageData(normalImgData, 0, 0);
-        state.normalCanvas = normalCanvas;
-    } catch(err) {
-        console.warn("Bypassed normal map generation due to system memory limitations:", err);
-        state.normalCanvas = null;
+    const heightCanvas = state.heightCanvas || document.createElement('canvas');
+    heightCanvas.width = w;
+    heightCanvas.height = h;
+    const hCtx = heightCanvas.getContext('2d');
+    const hImgData = hCtx.createImageData(w, h);
+    const hDst = hImgData.data;
+
+    for (let i = 0; i < w * h; i++) {
+        const val = Math.floor(heightArr[i] * 255);
+        const idx = i * 4;
+        hDst[idx] = val;
+        hDst[idx + 1] = val;
+        hDst[idx + 2] = val;
+        hDst[idx + 3] = 255;
     }
+    hCtx.putImageData(hImgData, 0, 0);
+    state.heightCanvas = heightCanvas;
+
+    // 2. High-Performance Sobel Normal Map (with Toroidal Seamless Boundary Wrap)
+    const normalCanvas = state.normalCanvas || document.createElement('canvas');
+    normalCanvas.width = w;
+    normalCanvas.height = h;
+    const nCtx = normalCanvas.getContext('2d');
+    const nImgData = nCtx.createImageData(w, h);
+    const nDst = nImgData.data;
+
+    const strength = parseFloat(document.getElementById('normalStrength').value || 3.0);
+    const directX = document.getElementById('directXNormalCheckbox').checked;
+    const seamless = document.getElementById('seamlessTilingCheckbox').checked;
+
+    for (let y = 0; y < h; y++) {
+        const ym1 = seamless ? (y === 0 ? h - 1 : y - 1) : Math.max(0, y - 1);
+        const yp1 = seamless ? (y === h - 1 ? 0 : y + 1) : Math.min(h - 1, y + 1);
+
+        for (let x = 0; x < w; x++) {
+            const xm1 = seamless ? (x === 0 ? w - 1 : x - 1) : Math.max(0, x - 1);
+            const xp1 = seamless ? (x === w - 1 ? 0 : x + 1) : Math.min(w - 1, x + 1);
+
+            const l00 = heightArr[ym1 * w + xm1];
+            const l10 = heightArr[ym1 * w + x];
+            const l20 = heightArr[ym1 * w + xp1];
+            const l01 = heightArr[y * w + xm1];
+            const l21 = heightArr[y * w + xp1];
+            const l02 = heightArr[yp1 * w + xm1];
+            const l12 = heightArr[yp1 * w + x];
+            const l22 = heightArr[yp1 * w + xp1];
+
+            const dX = ((l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02));
+            const dY = ((l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20));
+
+            let nx = -dX * strength;
+            let ny = directX ? (dY * strength) : (-dY * strength);
+            let nz = 1.0;
+
+            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
+            const normX = nx / len;
+            const normY = ny / len;
+            const normZ = nz / len;
+
+            const idx = (y * w + x) * 4;
+            nDst[idx]     = Math.floor((normX + 1.0) * 127.5);
+            nDst[idx + 1] = Math.floor((normY + 1.0) * 127.5);
+            nDst[idx + 2] = Math.floor((normZ + 1.0) * 127.5);
+            nDst[idx + 3] = 255;
+        }
+    }
+    nCtx.putImageData(nImgData, 0, 0);
+    state.normalCanvas = normalCanvas;
+
+    // 3. Roughness Map
+    const roughnessCanvas = state.roughnessCanvas || document.createElement('canvas');
+    roughnessCanvas.width = w;
+    roughnessCanvas.height = h;
+    const rCtx = roughnessCanvas.getContext('2d');
+    const rImgData = rCtx.createImageData(w, h);
+    const rDst = rImgData.data;
+    const baseRough = parseFloat(document.getElementById('matRoughness').value || 0.6);
+
+    for (let i = 0; i < w * h; i++) {
+        const microVar = (1.0 - heightArr[i]) * 0.4;
+        const roughVal = Math.max(0, Math.min(255, Math.floor((baseRough * 0.7 + microVar) * 255)));
+        const idx = i * 4;
+        rDst[idx]     = roughVal;
+        rDst[idx + 1] = roughVal;
+        rDst[idx + 2] = roughVal;
+        rDst[idx + 3] = 255;
+    }
+    rCtx.putImageData(rImgData, 0, 0);
+    state.roughnessCanvas = roughnessCanvas;
+
+    // 4. Ambient Occlusion Map (Screen-Space Cavity / Crevice Darkness)
+    const aoCanvas = state.aoCanvas || document.createElement('canvas');
+    aoCanvas.width = w;
+    aoCanvas.height = h;
+    const aoCtx = aoCanvas.getContext('2d');
+    const aoImgData = aoCtx.createImageData(w, h);
+    const aoDst = aoImgData.data;
+
+    for (let y = 0; y < h; y++) {
+        const ym1 = seamless ? (y === 0 ? h - 1 : y - 1) : Math.max(0, y - 1);
+        const yp1 = seamless ? (y === h - 1 ? 0 : y + 1) : Math.min(h - 1, y + 1);
+
+        for (let x = 0; x < w; x++) {
+            const xm1 = seamless ? (x === 0 ? w - 1 : x - 1) : Math.max(0, x - 1);
+            const xp1 = seamless ? (x === w - 1 ? 0 : x + 1) : Math.min(w - 1, x + 1);
+
+            const center = heightArr[y * w + x];
+            const avgNeighbor = (
+                heightArr[ym1 * w + x] + heightArr[yp1 * w + x] +
+                heightArr[y * w + xm1] + heightArr[y * w + xp1]
+            ) * 0.25;
+
+            // Crevices (where neighbor is higher than center) get darkened
+            const cavity = Math.max(0, avgNeighbor - center) * 5.0;
+            const aoVal = Math.max(0, Math.min(255, Math.floor((1.0 - cavity) * 255)));
+
+            const idx = (y * w + x) * 4;
+            aoDst[idx]     = aoVal;
+            aoDst[idx + 1] = aoVal;
+            aoDst[idx + 2] = aoVal;
+            aoDst[idx + 3] = 255;
+        }
+    }
+    aoCtx.putImageData(aoImgData, 0, 0);
+    state.aoCanvas = aoCanvas;
 }
 
-// --- 7. MULTI-THREADED WORKER SCHEDULER ---
+function render2DCanvasView() {
+    const w = state.canvas.width;
+    const h = state.canvas.height;
+    if (w * h === 0) return;
 
+    if (state.currentViewMap === 'diffuse') {
+        // Already drawn on main canvas
+        return;
+    }
+    let targetSource = state.canvas;
+    if (state.currentViewMap === 'normal' && state.normalCanvas) targetSource = state.normalCanvas;
+    else if (state.currentViewMap === 'height' && state.heightCanvas) targetSource = state.heightCanvas;
+    else if (state.currentViewMap === 'roughness' && state.roughnessCanvas) targetSource = state.roughnessCanvas;
+    else if (state.currentViewMap === 'ao' && state.aoCanvas) targetSource = state.aoCanvas;
+
+    ctx.drawImage(targetSource, 0, 0);
+}
+
+// --- 8. MULTI-THREADED WORKER SCHEDULER & PIPELINE ---
 function generateTexture() {
     if (isRendering) {
         activeWorkers.forEach(w => w.terminate());
@@ -1803,11 +2358,12 @@ function generateTexture() {
     if (!checkResolutionSupport()) return;
 
     isRendering = true;
+    const renderId = ++currentRenderId;
 
     const loader = document.getElementById('loader');
     const loaderText = document.getElementById('loaderText');
     const progressBar = document.getElementById('progressBar');
-    
+
     loader.classList.add('active');
     loaderText.innerText = 'Initializing workers...';
     progressBar.style.width = '0%';
@@ -1819,46 +2375,88 @@ function generateTexture() {
         state.canvas.width = w;
         state.canvas.height = h;
         ctx = state.canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) throw new Error("Null Canvas context reference.");
+        if (!ctx) throw new Error("Canvas context is unavailable.");
     } catch (err) {
         loader.classList.remove('active');
         isRendering = false;
-        alert(`Render failed: Canvas memory allocation boundary exceeded.\nPlease reduce target dimensions and try again.`);
+        alert(`Render allocation aborted: GPU memory limit exceeded.`);
         return;
     }
 
-    if(state.uploadedImage) {
+    // Custom Image Upload Pipeline
+    if (state.uploadedImage) {
         ctx.drawImage(state.uploadedImage, 0, 0, w, h);
-        generateNormalMap();
-        threeView.updateTexture(state.canvas);
+
+        if (document.getElementById('seamlessBlendUpload').checked) {
+            applySeamlessEdgeBlend(state.canvas);
+        }
+
+        // Apply Post-Processing to uploaded image
+        const imgData = ctx.getImageData(0, 0, w, h);
+        const data = imgData.data;
+        const contrast = parseFloat(document.getElementById('contrast').value);
+        const brightness = parseFloat(document.getElementById('brightness').value);
+        const invert = document.getElementById('invert').checked;
+        const threshOn = document.getElementById('thresholdEnable').checked;
+        const thresh = parseFloat(document.getElementById('threshold').value);
+
+        state.rawHeights = new Float32Array(w * h);
+
+        for (let i = 0; i < w * h; i++) {
+            const idx = i * 4;
+            let lum = (0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2]) / 255.0;
+            if (invert) lum = 1.0 - lum;
+            lum = (lum - 0.5) * contrast + 0.5 + brightness;
+            lum = Math.max(0, Math.min(1, lum));
+            if (threshOn) lum = lum >= thresh ? 1.0 : 0.0;
+            state.rawHeights[i] = lum;
+
+            for (let c = 0; c < 3; c++) {
+                let v = data[idx + c] / 255.0;
+                if (invert) v = 1.0 - v;
+                v = (v - 0.5) * contrast + 0.5 + brightness;
+                v = Math.max(0, Math.min(1, v));
+                if (threshOn) v = v >= thresh ? 1.0 : 0.0;
+                data[idx + c] = Math.round(v * 255);
+            }
+        }
+        ctx.putImageData(imgData, 0, 0);
+
+        generateAllPbrMaps();
+        if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+        render2DCanvasView();
         loader.classList.remove('active');
         isRendering = false;
-        return; 
+        return;
     }
 
+    // Procedural Pipeline Setup
+    state.rawHeights = new Float32Array(w * h);
+
     const payload = {
-        seed: parseInt(document.getElementById('seed').value),
+        seed: parseInt(document.getElementById('seed').value) || 12345,
         noiseType: document.getElementById('noiseType').value,
-        scale: parseInt(document.getElementById('scale').value),
-        octaves: parseInt(document.getElementById('octaves').value),
-        persistence: parseFloat(document.getElementById('persistence').value),
-        lacunarity: parseFloat(document.getElementById('lacunarity').value),
+        scale: parseInt(document.getElementById('scale').value) || 50,
+        octaves: parseInt(document.getElementById('octaves').value) || 4,
+        persistence: parseFloat(document.getElementById('persistence').value) || 0.5,
+        lacunarity: parseFloat(document.getElementById('lacunarity').value) || 2.0,
         ridged: document.getElementById('ridged').checked,
-        turbStrength: parseInt(document.getElementById('turbStrength').value),
-        turbScale: parseInt(document.getElementById('turbScale').value),
+        turbStrength: parseInt(document.getElementById('turbStrength').value) || 0,
+        turbScale: parseInt(document.getElementById('turbScale').value) || 50,
         worleyType: document.getElementById('worleyType').value,
         worleyDist: document.getElementById('worleyDist').value,
-        contrast: parseFloat(document.getElementById('contrast').value),
-        brightness: parseFloat(document.getElementById('brightness').value),
+        contrast: parseFloat(document.getElementById('contrast').value) || 1.0,
+        brightness: parseFloat(document.getElementById('brightness').value) || 0.0,
         invert: document.getElementById('invert').checked,
         thresholdEnable: document.getElementById('thresholdEnable').checked,
-        threshold: parseFloat(document.getElementById('threshold').value),
+        threshold: parseFloat(document.getElementById('threshold').value) || 0.5,
         seamless: document.getElementById('seamlessTilingCheckbox').checked,
         gradientStops: state.gradientStops
     };
 
     let N = navigator.hardwareConcurrency || 4;
-    N = Math.max(2, Math.min(8, N));
+    N = Math.max(1, Math.min(8, N));
+    N = Math.min(N, h);
 
     const chunkHeight = Math.floor(h / N);
     let completedChunks = 0;
@@ -1868,47 +2466,60 @@ function generateTexture() {
         const startY = i * chunkHeight;
         const endY = (i === N - 1) ? h : (i + 1) * chunkHeight;
 
-        let worker = new Worker(workerURL);
+        let worker;
+        try {
+            worker = createWorker();
+        } catch (workerErr) {
+            console.error("Worker spawn fallback:", workerErr);
+            loader.classList.remove('active');
+            isRendering = false;
+            return;
+        }
+
         activeWorkers.push(worker);
 
         worker.onmessage = function(e) {
-            if (e.data.type === 'CHUNK_COMPLETE') {
+            if (renderId !== currentRenderId) return;
+
+            if (e.data && e.data.type === 'CHUNK_COMPLETE') {
                 const chunkData = e.data.data;
+                const heightChunk = e.data.heightData;
                 const chunkStartY = e.data.startY;
                 const chunkEndY = e.data.endY;
-                const localChunkHeight = chunkEndY - chunkStartY;
+                const localChunkH = chunkEndY - chunkStartY;
 
-                const chunkImageData = new ImageData(chunkData, w, localChunkHeight);
-                ctx.putImageData(chunkImageData, 0, chunkStartY);
+                const chunkImg = new ImageData(chunkData, w, localChunkH);
+                ctx.putImageData(chunkImg, 0, chunkStartY);
+
+                if (heightChunk && state.rawHeights) {
+                    state.rawHeights.set(heightChunk, chunkStartY * w);
+                }
 
                 completedChunks++;
                 const percentage = Math.round((completedChunks / N) * 100);
-                loaderText.innerText = `Rendering... ${percentage}%`;
+                loaderText.innerText = `Rendering Procedural Texture... ${percentage}%`;
                 progressBar.style.width = `${percentage}%`;
 
-                if (livePreview) {
+                if (livePreview && threeView && threeView.isAvailable) {
                     proxyCtx.drawImage(state.canvas, 0, 0, 512, 512);
-                    threeView.updateTexture();
+                    threeView.applyTexture(proxyCanvas, 'diffuse');
                 }
 
                 if (completedChunks === N) {
                     isRendering = false;
-                    generateNormalMap();
-                    
                     activeWorkers.forEach(w => w.terminate());
                     activeWorkers = [];
-                    
+
+                    generateAllPbrMaps();
+                    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+                    render2DCanvasView();
                     loader.classList.remove('active');
-                    
-                    requestAnimationFrame(() => {
-                        threeView.updateTexture(state.canvas);
-                    });
                 }
             }
         };
 
         worker.onerror = function(err) {
-            console.error("Worker Thread Error:", err);
+            console.error("Worker processing error:", err);
             loader.classList.remove('active');
             isRendering = false;
             activeWorkers.forEach(w => w.terminate());
@@ -1926,46 +2537,198 @@ function generateTexture() {
     }
 }
 
-// --- 8. PRESETS & RANDOMIZERS WITH RICH MULTI-STOP GRADIENTS ---
+// --- 9. PRESETS, RANDOMIZERS & SERIALIZATION (JSON) ---
+const presets = {
+    stone: {
+        noiseType: 'value', scale: 120, octaves: 8, persistence: 0.55, lacunarity: 2.0,
+        contrast: 1.3, brightness: 0.05,
+        matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.45, displacementScale: 0.06,
+        stops: [
+            { pos: 0.0, color: "#181818" }, { pos: 0.25, color: "#424242" },
+            { pos: 0.55, color: "#7a7a7a" }, { pos: 0.8, color: "#ababab" },
+            { pos: 1.0, color: "#dedede" }
+        ]
+    },
+    lava: {
+        noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, lacunarity: 2.0,
+        ridged: true, turbStrength: 30, turbScale: 60,
+        contrast: 1.8, brightness: 0.05, invert: false,
+        bumpScale: 0.8, matRoughness: 0.35, matMetalness: 0.1, displacementScale: 0.08,
+        stops: [
+            { pos: 0.0, color: "#1a0500" }, { pos: 0.2, color: "#540800" },
+            { pos: 0.45, color: "#a31800" }, { pos: 0.7, color: "#ff4d00" },
+            { pos: 0.88, color: "#ffaa00" }, { pos: 1.0, color: "#fff3a8" }
+        ]
+    },
+    wood: {
+        noiseType: 'value', scale: 12, octaves: 3, persistence: 0.65, lacunarity: 2.0,
+        turbStrength: 25, turbScale: 120,
+        contrast: 1.4, brightness: 0.05,
+        matRoughness: 0.75, matMetalness: 0.0, bumpScale: 0.25, displacementScale: 0.03,
+        stops: [
+            { pos: 0.0, color: "#3d1e08" }, { pos: 0.25, color: "#5c3317" },
+            { pos: 0.55, color: "#8b5e3c" }, { pos: 0.8, color: "#b58759" },
+            { pos: 1.0, color: "#dbc19c" }
+        ]
+    },
+    water: {
+        noiseType: 'simplex', scale: 90, octaves: 5, persistence: 0.45, lacunarity: 2.0,
+        ridged: true, turbStrength: 45, turbScale: 70,
+        contrast: 1.3, brightness: 0.1, invert: false,
+        bumpScale: 0.25, matRoughness: 0.08, matMetalness: 0.3, displacementScale: 0.04,
+        stops: [
+            { pos: 0.0, color: "#001b33" }, { pos: 0.25, color: "#004b7a" },
+            { pos: 0.55, color: "#0088cc" }, { pos: 0.82, color: "#48cae4" },
+            { pos: 1.0, color: "#caf0f8" }
+        ]
+    },
+    clouds: {
+        noiseType: 'perlin', scale: 80, octaves: 6, persistence: 0.5, lacunarity: 2.0,
+        contrast: 1.5, brightness: 0.15,
+        bumpScale: 0.05, matRoughness: 1.0, matMetalness: 0.0, displacementScale: 0.01,
+        stops: [
+            { pos: 0.0, color: "#2270a8" }, { pos: 0.35, color: "#4a9fd4" },
+            { pos: 0.65, color: "#87c4e8" }, { pos: 0.88, color: "#daeef8" },
+            { pos: 1.0, color: "#ffffff" }
+        ]
+    },
+    rust: {
+        noiseType: 'simplex', scale: 45, octaves: 6, persistence: 0.65, lacunarity: 2.0,
+        turbStrength: 15, turbScale: 60,
+        contrast: 1.5, brightness: 0.0,
+        matRoughness: 0.85, matMetalness: 0.55, bumpScale: 0.6, displacementScale: 0.07,
+        stops: [
+            { pos: 0.0, color: "#361600" }, { pos: 0.22, color: "#6e2900" },
+            { pos: 0.48, color: "#b5460e" }, { pos: 0.72, color: "#db6a2a" },
+            { pos: 0.88, color: "#e89966" }, { pos: 1.0, color: "#f7d5be" }
+        ]
+    },
+    cells: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 40, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        contrast: 2.5, brightness: 0.1, invert: false,
+        matRoughness: 0.2, matMetalness: 0.5, bumpScale: 0.45, displacementScale: 0.05,
+        stops: [
+            { pos: 0.0, color: "#051205" }, { pos: 0.2, color: "#0c4722" },
+            { pos: 0.45, color: "#198c47" }, { pos: 0.72, color: "#32d677" },
+            { pos: 0.9, color: "#85f5b4" }, { pos: 1.0, color: "#e3ffef" }
+        ]
+    },
+    ice: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan',
+        scale: 65, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        contrast: 2.0, brightness: 0.2, invert: false,
+        bumpScale: 0.35, matRoughness: 0.08, matMetalness: 0.15, displacementScale: 0.04,
+        stops: [
+            { pos: 0.0, color: "#051a30" }, { pos: 0.22, color: "#104f7a" },
+            { pos: 0.5, color: "#2d8bc9" }, { pos: 0.75, color: "#80c7f2" },
+            { pos: 0.9, color: "#cbe8fa" }, { pos: 1.0, color: "#ffffff" }
+        ]
+    },
+    cyberpunk: {
+        noiseType: 'perlin', scale: 40, octaves: 4, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 45, turbScale: 50, contrast: 1.8, brightness: 0.0,
+        matRoughness: 0.2, matMetalness: 0.85, bumpScale: 0.6, displacementScale: 0.06,
+        stops: [
+            { pos: 0.0, color: "#080012" }, { pos: 0.3, color: "#450069" },
+            { pos: 0.6, color: "#c7006a" }, { pos: 0.85, color: "#00f0ff" },
+            { pos: 1.0, color: "#ffffff" }
+        ]
+    },
+    gold: {
+        noiseType: 'simplex', scale: 50, octaves: 5, persistence: 0.6, lacunarity: 2.0,
+        contrast: 1.4, brightness: 0.05,
+        matRoughness: 0.3, matMetalness: 0.95, bumpScale: 0.35, displacementScale: 0.04,
+        stops: [
+            { pos: 0.0, color: "#1f1406" }, { pos: 0.25, color: "#543b14" },
+            { pos: 0.55, color: "#a87f2e" }, { pos: 0.8, color: "#e8be5a" },
+            { pos: 1.0, color: "#fff0b8" }
+        ]
+    },
+    marble: {
+        noiseType: 'perlin', scale: 65, octaves: 6, persistence: 0.55, lacunarity: 2.2,
+        turbStrength: 50, turbScale: 75, contrast: 1.6, brightness: 0.1,
+        matRoughness: 0.15, matMetalness: 0.05, bumpScale: 0.2, displacementScale: 0.02,
+        stops: [
+            { pos: 0.0, color: "#0d0d0d" }, { pos: 0.18, color: "#383838" },
+            { pos: 0.45, color: "#808080" }, { pos: 0.78, color: "#e0e0e0" },
+            { pos: 1.0, color: "#ffffff" }
+        ]
+    },
+    sand: {
+        noiseType: 'simplex', scale: 35, octaves: 4, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 20, turbScale: 100, contrast: 1.3, brightness: 0.0,
+        matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.4, displacementScale: 0.05,
+        stops: [
+            { pos: 0.0, color: "#472b0c" }, { pos: 0.25, color: "#7a4c19" },
+            { pos: 0.55, color: "#ba8443" }, { pos: 0.8, color: "#e3b878" },
+            { pos: 1.0, color: "#faecc8" }
+        ]
+    },
+    plasma: {
+        noiseType: 'simplex', scale: 50, octaves: 6, persistence: 0.65, lacunarity: 2.3,
+        ridged: true, turbStrength: 60, turbScale: 40, contrast: 2.0, brightness: 0.1,
+        matRoughness: 0.1, matMetalness: 0.7, bumpScale: 0.5, displacementScale: 0.07,
+        stops: [
+            { pos: 0.0, color: "#050014" }, { pos: 0.25, color: "#2a0066" },
+            { pos: 0.5, color: "#8800ff" }, { pos: 0.75, color: "#00d4ff" },
+            { pos: 1.0, color: "#ffffff" }
+        ]
+    },
+    leather: {
+        noiseType: 'worley', worleyType: 'f1', worleyDist: 'euclidean',
+        scale: 18, octaves: 3, persistence: 0.4, lacunarity: 2.0,
+        contrast: 1.3, brightness: -0.05,
+        matRoughness: 0.65, matMetalness: 0.05, bumpScale: 0.5, displacementScale: 0.04,
+        stops: [
+            { pos: 0.0, color: "#1c0d02" }, { pos: 0.25, color: "#3d1e08" },
+            { pos: 0.55, color: "#663510" }, { pos: 0.8, color: "#8f5120" },
+            { pos: 1.0, color: "#b3743b" }
+        ]
+    }
+};
 
 function applyStateToUI(p) {
-    const d = {
+    clearTimeout(debounceTimer);
+    const defaults = {
         noiseType: 'perlin', scale: 50, octaves: 4, persistence: 0.5, lacunarity: 2.0, ridged: false,
         turbStrength: 0, turbScale: 50, contrast: 1.0, brightness: 0.0, invert: false,
         worleyType: 'f1', worleyDist: 'euclidean', thresholdEnable: false, threshold: 0.5,
-        bumpScale: 0.2, matRoughness: 0.6, matMetalness: 0.1, normalStrength: 3.0,
+        bumpScale: 0.3, displacementScale: 0.05, matRoughness: 0.6, matMetalness: 0.1,
+        aoIntensity: 1.0, normalStrength: 3.0, directXNormalCheckbox: false, seamlessTilingCheckbox: true,
         stops: [{ pos: 0, color: "#000000" }, { pos: 1, color: "#ffffff" }]
     };
 
-    clearTimeout(debounceTimer);
-
-    Object.keys(d).forEach(k => {
-        const val = p[k] !== undefined ? p[k] : d[k];
+    Object.keys(defaults).forEach(k => {
+        const val = p[k] !== undefined ? p[k] : defaults[k];
         const el = state.inputs[k];
-        if(!el) return;
-        
+        if (!el) return;
         if (el.type === 'checkbox') el.checked = !!val;
         else el.value = val;
-        
         if (el.type === 'range') updateValueLabel(k, val);
     });
 
-    state.gradientStops = JSON.parse(JSON.stringify(p.stops || d.stops));
+    state.gradientStops = JSON.parse(JSON.stringify(p.stops || defaults.stops));
     renderGradientUI();
-    if (threeView) threeView.updateMaterial();
+    if (threeView) threeView.updateMaterialParams();
     generateTexture();
 }
 
-function randomize() {
-    if(state.uploadedImage) clearImageUpload();
-    const r = Math.random;
-    const noiseTypes = ['perlin', 'value', 'worley'];
-    const randomNoiseType = noiseTypes[Math.floor(r() * noiseTypes.length)];
+function loadPreset(name) {
+    if (state.uploadedImage) clearImageUpload();
+    if (name === 'custom' || !presets[name]) return;
+    applyStateToUI(presets[name]);
+}
 
-    // Generate random 2 to 6 color stops
+function randomizeAll() {
+    if (state.uploadedImage) clearImageUpload();
+    const r = Math.random;
+    const noiseList = ['simplex', 'perlin', 'value', 'worley'];
+    const randomNoise = noiseList[Math.floor(r() * noiseList.length)];
+
     const numStops = Math.floor(2 + r() * 5);
     const stops = [];
-    for(let i = 0; i < numStops; i++) {
+    for (let i = 0; i < numStops; i++) {
         const pos = i === 0 ? 0.0 : (i === numStops - 1 ? 1.0 : parseFloat(r().toFixed(2)));
         const color = '#' + Math.floor(r() * 16777215).toString(16).padStart(6, '0');
         stops.push({ pos, color });
@@ -1973,211 +2736,145 @@ function randomize() {
 
     const randomState = {
         seed: Math.floor(r() * 99999),
-        noiseType: randomNoiseType,
-        scale: Math.floor(20 + r() * 150),
+        noiseType: randomNoise,
+        scale: Math.floor(20 + r() * 160),
         octaves: Math.floor(2 + r() * 6),
-        persistence: (0.3 + r() * 0.6).toFixed(2),
-        ridged: r() > 0.7,
-        lacunarity: (1.5 + r() * 2.0).toFixed(1),
-        turbStrength: r() > 0.5 ? Math.floor(r() * 50) : 0,
-        contrast: (0.5 + r() * 2.0).toFixed(1),
-        brightness: (-0.3 + r() * 0.6).toFixed(2),
-        invert: r() > 0.85,
-        thresholdEnable: r() > 0.9,
-        threshold: r().toFixed(2),
-        bumpScale: (0.1 + r() * 0.8).toFixed(2),
-        matRoughness: r().toFixed(2),
-        matMetalness: (r() * 0.8).toFixed(2),
-        normalStrength: (1.0 + r() * 6.0).toFixed(1),
+        persistence: parseFloat((0.3 + r() * 0.55).toFixed(2)),
+        ridged: r() > 0.75,
+        lacunarity: parseFloat((1.5 + r() * 1.8).toFixed(1)),
+        turbStrength: r() > 0.4 ? Math.floor(r() * 60) : 0,
+        turbScale: Math.floor(30 + r() * 90),
+        contrast: parseFloat((0.6 + r() * 1.8).toFixed(1)),
+        brightness: parseFloat((-0.25 + r() * 0.5).toFixed(2)),
+        invert: r() > 0.88,
+        thresholdEnable: r() > 0.92,
+        threshold: parseFloat(r().toFixed(2)),
+        bumpScale: parseFloat((0.15 + r() * 0.8).toFixed(2)),
+        displacementScale: parseFloat((r() * 0.1).toFixed(2)),
+        matRoughness: parseFloat(r().toFixed(2)),
+        matMetalness: parseFloat((r() * 0.85).toFixed(2)),
+        aoIntensity: 1.0,
+        normalStrength: parseFloat((1.5 + r() * 5.0).toFixed(1)),
         stops: stops
     };
-    
+
     state.inputs.seed.value = randomState.seed;
     applyStateToUI(randomState);
 }
 
-const presets = {
-    stone: {
-        noiseType: 'value', scale: 120, octaves: 8, persistence: 0.55, lacunarity: 2.0,
-        contrast: 1.3, brightness: 0.05,
-        matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.4,
-        stops: [
-            { pos: 0.0, color: "#222222" },
-            { pos: 0.25, color: "#4a4a4a" },
-            { pos: 0.55, color: "#7c7c7c" },
-            { pos: 0.8, color: "#a8a8a8" },
-            { pos: 1.0, color: "#e0e0e0" }
-        ]
-    },
-    lava: {
-        noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, lacunarity: 2.0,
-        ridged: true, turbStrength: 30, turbScale: 60,
-        contrast: 1.8, brightness: 0.05, invert: false,
-        bumpScale: 0.8, matRoughness: 0.4, matMetalness: 0.1,
-        stops: [
-            { pos: 0.0, color: "#1a0500" },
-            { pos: 0.2, color: "#540800" },
-            { pos: 0.45, color: "#a31800" },
-            { pos: 0.7, color: "#ff4d00" },
-            { pos: 0.88, color: "#ffaa00" },
-            { pos: 1.0, color: "#fff3a8" }
-        ]
-    },
-    wood: {
-        noiseType: 'value', scale: 12, octaves: 3, persistence: 0.65, lacunarity: 2.0,
-        turbStrength: 25, turbScale: 120,
-        contrast: 1.4, brightness: 0.05,
-        matRoughness: 0.7, matMetalness: 0.0, bumpScale: 0.25,
-        stops: [
-            { pos: 0.0, color: "#3d1e08" },
-            { pos: 0.25, color: "#5c3317" },
-            { pos: 0.55, color: "#8b5e3c" },
-            { pos: 0.8, color: "#b58759" },
-            { pos: 1.0, color: "#dbc19c" }
-        ]
-    },
-    water: {
-        noiseType: 'perlin', scale: 90, octaves: 5, persistence: 0.45, lacunarity: 2.0,
-        ridged: true, turbStrength: 50, turbScale: 70,
-        contrast: 1.3, brightness: 0.1, invert: false,
-        bumpScale: 0.15, matRoughness: 0.05, matMetalness: 0.4,
-        stops: [
-            { pos: 0.0, color: "#001b33" },
-            { pos: 0.25, color: "#004b7a" },
-            { pos: 0.55, color: "#0088cc" },
-            { pos: 0.82, color: "#48cae4" },
-            { pos: 1.0, color: "#caf0f8" }
-        ]
-    },
-    clouds: {
-        noiseType: 'perlin', scale: 80, octaves: 6, persistence: 0.5, lacunarity: 2.0,
-        contrast: 1.5, brightness: 0.15,
-        bumpScale: 0.05, matRoughness: 1.0, matMetalness: 0.0,
-        stops: [
-            { pos: 0.0, color: "#2270a8" },
-            { pos: 0.35, color: "#4a9fd4" },
-            { pos: 0.65, color: "#87c4e8" },
-            { pos: 0.88, color: "#daeef8" },
-            { pos: 1.0, color: "#ffffff" }
-        ]
-    },
-    rust: {
-        noiseType: 'perlin', scale: 45, octaves: 6, persistence: 0.65, lacunarity: 2.0,
-        turbStrength: 12, turbScale: 60,
-        contrast: 1.5, brightness: 0.0,
-        matRoughness: 0.85, matMetalness: 0.55, bumpScale: 0.5,
-        stops: [
-            { pos: 0.0, color: "#361600" },
-            { pos: 0.22, color: "#6e2900" },
-            { pos: 0.48, color: "#b5460e" },
-            { pos: 0.72, color: "#db6a2a" },
-            { pos: 0.88, color: "#e89966" },
-            { pos: 1.0, color: "#f7d5be" }
-        ]
-    },
-    cells: {
-        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
-        scale: 40, octaves: 1, persistence: 0.5, lacunarity: 2.0,
-        contrast: 2.5, brightness: 0.1, invert: false,
-        matRoughness: 0.2, matMetalness: 0.5, bumpScale: 0.4,
-        stops: [
-            { pos: 0.0, color: "#051205" },
-            { pos: 0.2, color: "#0c4722" },
-            { pos: 0.45, color: "#198c47" },
-            { pos: 0.72, color: "#32d677" },
-            { pos: 0.9, color: "#85f5b4" },
-            { pos: 1.0, color: "#e3ffef" }
-        ]
-    },
-    ice: {
-        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan',
-        scale: 65, octaves: 1, persistence: 0.5, lacunarity: 2.0,
-        contrast: 2.0, brightness: 0.2, invert: false,
-        bumpScale: 0.35, matRoughness: 0.08, matMetalness: 0.15,
-        stops: [
-            { pos: 0.0, color: "#051a30" },
-            { pos: 0.22, color: "#104f7a" },
-            { pos: 0.5, color: "#2d8bc9" },
-            { pos: 0.75, color: "#80c7f2" },
-            { pos: 0.9, color: "#cbe8fa" },
-            { pos: 1.0, color: "#ffffff" }
-        ]
-    },
-    cyberpunk: {
-        noiseType: 'perlin', scale: 40, octaves: 4, persistence: 0.5, lacunarity: 2.0,
-        turbStrength: 45, turbScale: 50, contrast: 1.8, brightness: 0.0,
-        matRoughness: 0.2, matMetalness: 0.8, bumpScale: 0.6,
-        stops: [
-            { pos: 0.0, color: "#080012" },
-            { pos: 0.3, color: "#450069" },
-            { pos: 0.6, color: "#c7006a" },
-            { pos: 0.85, color: "#00f0ff" },
-            { pos: 1.0, color: "#ffffff" }
-        ]
-    },
-    gold: {
-        noiseType: 'perlin', scale: 50, octaves: 5, persistence: 0.6, lacunarity: 2.0,
-        contrast: 1.4, brightness: 0.05,
-        matRoughness: 0.3, matMetalness: 0.9, bumpScale: 0.3,
-        stops: [
-            { pos: 0.0, color: "#1f1406" },
-            { pos: 0.25, color: "#543b14" },
-            { pos: 0.55, color: "#a87f2e" },
-            { pos: 0.8, color: "#e8be5a" },
-            { pos: 1.0, color: "#fff0b8" }
-        ]
-    }
-};
+function exportPresetJSON() {
+    const config = {
+        version: "2.0-pro",
+        seed: state.inputs.seed.value,
+        noiseType: state.inputs.noiseType.value,
+        scale: state.inputs.scale.value,
+        octaves: state.inputs.octaves.value,
+        persistence: state.inputs.persistence.value,
+        lacunarity: state.inputs.lacunarity.value,
+        ridged: state.inputs.ridged.checked,
+        turbStrength: state.inputs.turbStrength.value,
+        turbScale: state.inputs.turbScale.value,
+        worleyType: state.inputs.worleyType.value,
+        worleyDist: state.inputs.worleyDist.value,
+        contrast: state.inputs.contrast.value,
+        brightness: state.inputs.brightness.value,
+        invert: state.inputs.invert.checked,
+        thresholdEnable: state.inputs.thresholdEnable.checked,
+        threshold: state.inputs.threshold.value,
+        bumpScale: state.inputs.bumpScale.value,
+        displacementScale: state.inputs.displacementScale.value,
+        matRoughness: state.inputs.matRoughness.value,
+        matMetalness: state.inputs.matMetalness.value,
+        aoIntensity: state.inputs.aoIntensity.value,
+        normalStrength: state.inputs.normalStrength.value,
+        directXNormal: state.inputs.directXNormalCheckbox.checked,
+        seamlessTiling: state.inputs.seamlessTilingCheckbox.checked,
+        stops: state.gradientStops
+    };
 
-function loadPreset(name) {
-    if(state.uploadedImage) clearImageUpload();
-    if(name === 'custom' || !presets[name]) return;
-    clearTimeout(debounceTimer);
-    applyStateToUI(presets[name]);
+    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
+    const dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute("href", jsonStr);
+    dlAnchor.setAttribute("download", `texture_preset_${config.noiseType}_${config.seed}.json`);
+    document.body.appendChild(dlAnchor);
+    dlAnchor.click();
+    dlAnchor.remove();
 }
 
-function download() {
-    const btn = document.getElementById('downloadBtn');
-    const originalText = btn.innerText;
-    btn.innerText = "Processing...";
-    
-    state.canvas.toBlob((blob) => {
+function importPresetJSON(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+        try {
+            const parsed = JSON.parse(event.target.result);
+            applyStateToUI(parsed);
+        } catch (err) {
+            alert("Invalid preset JSON file.");
+        }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+}
+
+// --- 10. DOWNLOAD & EXPORT ENGINE ---
+function downloadCanvasAsPNG(targetCanvas, filename) {
+    if (!targetCanvas) return;
+    targetCanvas.toBlob((blob) => {
         if (!blob) {
-            alert("Export failed: Canvas is too large or system is out of memory.");
-            btn.innerText = originalText;
+            alert("Export failed: Canvas buffer memory limit exceeded.");
             return;
         }
         const link = document.createElement('a');
-        link.download = `diffuse_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
-        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        const url = URL.createObjectURL(blob);
+        link.href = url;
+        document.body.appendChild(link);
         link.click();
-        URL.revokeObjectURL(link.href);
-        btn.innerText = originalText;
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(url), 1200);
     }, 'image/png');
 }
 
-function downloadNormal() {
-    if (!state.normalCanvas) return alert("Normal map calculation was skipped or is unavailable at this resolution.");
-    const btn = document.getElementById('downloadNormalBtn');
-    const originalText = btn.innerText;
-    btn.innerText = "Processing...";
-    
-    state.normalCanvas.toBlob((blob) => {
-        if (!blob) {
-            alert("Export failed: Normal map canvas is too large or system is out of memory.");
-            btn.innerText = originalText;
-            return;
+function downloadCurrentViewMap() {
+    const w = state.canvas.width;
+    const h = state.canvas.height;
+    const seed = state.inputs.seed.value;
+    const type = state.currentViewMap;
+
+    let target = state.canvas;
+    if (type === 'normal' && state.normalCanvas) target = state.normalCanvas;
+    else if (type === 'height' && state.heightCanvas) target = state.heightCanvas;
+    else if (type === 'roughness' && state.roughnessCanvas) target = state.roughnessCanvas;
+    else if (type === 'ao' && state.aoCanvas) target = state.aoCanvas;
+
+    downloadCanvasAsPNG(target, `${type}_${seed}_${w}x${h}.png`);
+}
+
+function downloadAllPbrMaps() {
+    const w = state.canvas.width;
+    const h = state.canvas.height;
+    const seed = state.inputs.seed.value;
+
+    const maps = [
+        { canvas: state.canvas, name: `diffuse_${seed}_${w}x${h}.png` },
+        { canvas: state.normalCanvas, name: `normal_${seed}_${w}x${h}.png` },
+        { canvas: state.heightCanvas, name: `height_${seed}_${w}x${h}.png` },
+        { canvas: state.roughnessCanvas, name: `roughness_${seed}_${w}x${h}.png` },
+        { canvas: state.aoCanvas, name: `ao_${seed}_${w}x${h}.png` }
+    ];
+
+    let delay = 0;
+    maps.forEach(m => {
+        if (m.canvas) {
+            setTimeout(() => downloadCanvasAsPNG(m.canvas, m.name), delay);
+            delay += 250;
         }
-        const link = document.createElement('a');
-        link.download = `normal_${state.inputs.seed.value}_${state.inputs.texWidth.value}x${state.inputs.texHeight.value}.png`;
-        link.href = URL.createObjectURL(blob);
-        link.click();
-        URL.revokeObjectURL(link.href);
-        btn.innerText = originalText;
-    }, 'image/png');
+    });
 }
 
-window.onload = init;
+window.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
