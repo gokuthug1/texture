@@ -1,222 +1,306 @@
 <!DOCTYPE html>
-<!-- 
-  ULTIMATE TEXTURE GENERATOR 3D - PRO EDITION
-  - Multi-Algorithm Procedural Noise: Perlin, Simplex, Value, Worley/Cellular
-  - Full PBR Map Suite: Diffuse/Albedo, Normal, Height/Displacement, Roughness, Ambient Occlusion
-  - 4D Toroidal Seamless Tiling Engine with Zero Seam Artifacts
-  - Multi-Threaded Native Web Worker Architecture with Zero-Dependency Fallback
-  - Real-Time WebGL 3D Viewport with Orbit Controls, 10 Geometries, PBR Lighting & Channel Inspection
-  - Infinite Multi-Stop Gradient Engine with 12 Curated Palettes & Direct-Click Sampling
-  - Preset Import/Export (JSON) & Custom Image Post-Processing with Seamless Edge Blending
--->
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ULTIMATE Texture Generator 3D - PRO</title>
+    <title>Texture Engine 3D Pro — Procedural PBR Material Generator</title>
     <!-- Three.js & OrbitControls with Safe Offline Detection -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    
+
     <style>
         :root {
-            --primary: #3498db;
-            --primary-hover: #2980b9;
-            --secondary: #2c3e50;
-            --accent: #e67e22;
-            --accent-hover: #d35400;
-            --success: #27ae60;
-            --danger: #c0392b;
-            --bg: #141414;
-            --panel-bg: #222222;
-            --panel-header: #2d2d2d;
-            --control-bg: #2b2b2b;
-            --input-bg: #383838;
-            --input-border: #4f4f4f;
-            --text: #ecf0f1;
-            --text-dim: #9aa0a6;
-            --border-radius: 8px;
+            --color-bg: #0f1115;
+            --color-surface: #171922;
+            --color-surface-hover: #1f232f;
+            --color-surface-active: #272c3b;
+            --color-surface-header: #1d212c;
+            --color-input: #12141a;
+            --color-border: #292e3c;
+            --color-border-subtle: #202430;
+            --color-border-focus: #3b82f6;
+
+            --color-text: #f3f4f6;
+            --color-text-secondary: #9ca3af;
+            --color-text-muted: #6b7280;
+
+            --color-primary: #2563eb;
+            --color-primary-hover: #1d4ed8;
+            --color-primary-active: #1e40af;
+
+            --color-secondary: #374151;
+            --color-secondary-hover: #4b5563;
+
+            --color-accent: #d97706;
+            --color-accent-hover: #b45309;
+
+            --color-success: #16a34a;
+            --color-danger: #dc2626;
+            --color-danger-hover: #b91c1c;
+
+            --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, monospace;
+
+            --radius-sm: 4px;
+            --radius-md: 6px;
+            --radius-lg: 8px;
+
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 24px;
+
+            --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.4);
+            --transition-fast: 0.15s ease;
         }
 
         * { box-sizing: border-box; }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-            background-color: var(--bg);
-            color: var(--text);
+            font-family: var(--font-sans);
+            background-color: var(--color-bg);
+            color: var(--color-text);
             margin: 0;
-            padding: 20px;
+            padding: var(--space-4);
             display: flex;
             flex-direction: column;
             align-items: center;
             min-height: 100vh;
+            line-height: 1.5;
         }
 
         header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: var(--space-5);
+            max-width: 900px;
         }
 
         h1 {
-            color: var(--primary);
-            margin: 0 0 6px 0;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            font-size: 1.8rem;
-            text-shadow: 0 2px 10px rgba(0,0,0,0.5);
+            color: var(--color-text);
+            margin: 0 0 var(--space-1) 0;
+            font-weight: 700;
+            font-size: 1.5rem;
+            letter-spacing: -0.02em;
+        }
+
+        h1 span {
+            color: var(--color-primary);
+            font-size: 0.85em;
+            margin-left: 4px;
+            font-weight: 600;
         }
 
         .subtitle {
-            color: var(--text-dim);
+            color: var(--color-text-secondary);
             font-size: 0.85rem;
-            letter-spacing: 0.5px;
         }
 
         .main-container {
             display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
+            flex-direction: row;
+            gap: var(--space-5);
             width: 100%;
-            max-width: 1650px;
+            max-width: 1680px;
             justify-content: center;
             align-items: flex-start;
         }
 
-        /* --- Controls Panel --- */
+        /* --- Controls Sidebar --- */
         .controls-panel {
             flex: 1;
-            min-width: 350px;
+            min-width: 360px;
             max-width: 480px;
-            background: var(--panel-bg);
-            padding: 18px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-            max-height: 92vh;
+            background: var(--color-surface);
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-card);
+            max-height: 90vh;
             overflow-y: auto;
-            border: 1px solid #383838;
+            border: 1px solid var(--color-border);
         }
 
-        .controls-panel::-webkit-scrollbar { width: 8px; }
-        .controls-panel::-webkit-scrollbar-track { background: var(--panel-bg); }
-        .controls-panel::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        .controls-panel::-webkit-scrollbar { width: 6px; }
+        .controls-panel::-webkit-scrollbar-track { background: var(--color-surface); }
+        .controls-panel::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-sm); }
 
         details {
-            margin-bottom: 10px;
-            background: var(--control-bg);
-            border-radius: var(--border-radius);
+            margin-bottom: var(--space-2);
+            background: var(--color-surface-alt);
+            border-radius: var(--radius-md);
             overflow: hidden;
-            border: 1px solid #3c3c3c;
+            border: 1px solid var(--color-border);
         }
 
         summary {
-            padding: 11px 14px;
-            background: var(--panel-header);
+            padding: 10px 14px;
+            background: var(--color-surface-header);
             cursor: pointer;
             font-weight: 600;
-            color: var(--text);
+            color: var(--color-text);
             user-select: none;
-            transition: background 0.2s;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
+            list-style: none;
         }
-        
-        summary:hover { background: #383838; }
-        summary::after { content: '+'; font-weight: bold; color: var(--primary); font-size: 1.1rem; }
-        details[open] summary::after { content: '−'; }
 
-        .control-group { padding: 14px; border-top: 1px solid #3c3c3c; }
+        summary::-webkit-details-marker { display: none; }
 
-        /* --- Labels & Form Inputs --- */
+        summary:hover { background: var(--color-surface-hover); }
+
+        summary .chevron {
+            width: 16px;
+            height: 16px;
+            color: var(--color-text-secondary);
+            transition: transform var(--transition-fast);
+            flex-shrink: 0;
+        }
+
+        details[open] summary .chevron {
+            transform: rotate(180deg);
+        }
+
+        .control-group {
+            padding: var(--space-3) 14px;
+            border-top: 1px solid var(--color-border-subtle);
+        }
+
+        /* --- Form Elements --- */
         label {
             display: flex;
             justify-content: space-between;
-            font-size: 0.82rem;
-            font-weight: 600;
-            margin-bottom: 6px;
-            color: var(--text-dim);
+            align-items: center;
+            font-size: 0.8rem;
+            font-weight: 500;
+            margin-bottom: 4px;
+            color: var(--color-text-secondary);
         }
 
-        span.val { color: var(--primary); font-family: 'Consolas', monospace; font-size: 0.85rem; }
+        span.val {
+            color: var(--color-text);
+            font-family: var(--font-mono);
+            font-size: 0.78rem;
+            background: var(--color-input);
+            padding: 2px 6px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border-subtle);
+        }
 
         input[type="range"] {
             width: 100%;
-            height: 6px;
-            background: #4a4a4a;
-            border-radius: 5px;
+            height: 4px;
+            background: var(--color-border);
+            border-radius: var(--radius-sm);
             outline: none;
             -webkit-appearance: none;
             appearance: none;
-            margin: 4px 0 12px 0;
+            margin: 6px 0 12px 0;
         }
 
         input[type="range"]::-webkit-slider-thumb {
             -webkit-appearance: none;
             width: 16px;
             height: 16px;
-            background: var(--primary);
+            background: var(--color-primary);
             border-radius: 50%;
             cursor: pointer;
-            transition: transform 0.1s;
-            border: 2px solid white;
+            border: 2px solid #ffffff;
+            transition: transform var(--transition-fast);
         }
-        input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.2); }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.15);
+        }
+
+        input[type="range"]:focus-visible {
+            outline: 2px solid var(--color-border-focus);
+            outline-offset: 2px;
+        }
 
         select, input[type="number"], input[type="text"] {
             width: 100%;
-            padding: 8px 10px;
-            background: var(--input-bg);
-            border: 1px solid var(--input-border);
-            color: white;
-            border-radius: 6px;
+            padding: 7px 10px;
+            background: var(--color-input);
+            border: 1px solid var(--color-border);
+            color: var(--color-text);
+            border-radius: var(--radius-sm);
             box-sizing: border-box;
-            margin-bottom: 10px;
-            font-size: 0.85rem;
+            margin-bottom: var(--space-2);
+            font-size: 0.82rem;
+            font-family: inherit;
             outline: none;
-            transition: border-color 0.2s;
+            transition: border-color var(--transition-fast);
         }
+
         select:focus, input[type="number"]:focus, input[type="text"]:focus {
-            border-color: var(--primary);
+            border-color: var(--color-border-focus);
+            outline: 1px solid var(--color-border-focus);
         }
 
         input[type="file"] {
             width: 100%;
-            background: var(--input-bg);
+            background: var(--color-input);
             padding: 8px;
-            border-radius: 6px;
-            margin-bottom: 10px;
-            color: #bbb;
-            font-size: 0.8rem;
-            border: 1px dashed #555;
+            border-radius: var(--radius-sm);
+            margin-bottom: var(--space-2);
+            color: var(--color-text-secondary);
+            font-size: 0.78rem;
+            border: 1px dashed var(--color-border);
             cursor: pointer;
         }
 
-        .row { display: flex; gap: 8px; margin-bottom: 10px; align-items: center; }
-        .checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
-        .checkbox-row label { margin: 0; cursor: pointer; color: var(--text); font-size: 0.82rem; }
-        .checkbox-row input { width: auto; cursor: pointer; accent-color: var(--primary); }
+        .row {
+            display: flex;
+            gap: var(--space-2);
+            margin-bottom: var(--space-2);
+            align-items: center;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            margin: var(--space-2) 0;
+        }
+
+        .checkbox-row label {
+            margin: 0;
+            cursor: pointer;
+            color: var(--color-text);
+            font-size: 0.8rem;
+        }
+
+        .checkbox-row input {
+            cursor: pointer;
+            accent-color: var(--color-primary);
+            width: 15px;
+            height: 15px;
+        }
 
         /* --- Infinite Gradient Editor --- */
         #gradient-preview {
             height: 32px;
             width: 100%;
-            border-radius: 6px;
-            border: 2px solid #555;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
             margin-top: 4px;
             margin-bottom: 4px;
             cursor: crosshair;
-            box-shadow: inset 0 0 6px rgba(0,0,0,0.6);
-            transition: border-color 0.2s;
             position: relative;
         }
-        #gradient-preview:hover { border-color: var(--primary); }
-        
+
+        #gradient-preview:focus-visible {
+            outline: 2px solid var(--color-border-focus);
+            outline-offset: 2px;
+        }
+
         .gradient-helper-text {
             font-size: 0.72rem;
-            color: #888;
-            margin-bottom: 8px;
+            color: var(--color-text-muted);
+            margin-bottom: var(--space-2);
             display: block;
             text-align: center;
         }
@@ -225,8 +309,9 @@
             display: flex;
             gap: 6px;
             flex-wrap: wrap;
-            margin-bottom: 10px;
+            margin-bottom: var(--space-2);
         }
+
         .gradient-btn-row button {
             flex: 1;
             min-width: 75px;
@@ -238,296 +323,463 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
-            max-height: 220px;
+            max-height: 200px;
             overflow-y: auto;
             padding-right: 4px;
-            margin-bottom: 10px;
+            margin-bottom: var(--space-2);
         }
-        #gradient-stops-list::-webkit-scrollbar { width: 6px; }
-        #gradient-stops-list::-webkit-scrollbar-thumb { background: #555; border-radius: 3px; }
+
+        #gradient-stops-list::-webkit-scrollbar { width: 5px; }
+        #gradient-stops-list::-webkit-scrollbar-thumb { background: var(--color-border); border-radius: var(--radius-sm); }
 
         .gradient-stop-item {
             display: flex;
             align-items: center;
             gap: 8px;
-            background: #333333;
-            padding: 5px 8px;
-            border-radius: 6px;
-            border: 1px solid #444;
+            background: var(--color-surface);
+            padding: 4px 8px;
+            border-radius: var(--radius-sm);
+            border: 1px solid var(--color-border);
         }
+
         .gradient-stop-item input[type="color"] {
             border: none;
-            width: 32px;
-            height: 28px;
+            width: 28px;
+            height: 26px;
             cursor: pointer;
             background: none;
             padding: 0;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             flex-shrink: 0;
         }
+
         .gradient-stop-item input[type="range"] {
             flex: 1;
             margin: 0;
             height: 4px;
         }
+
         .gradient-stop-item input[type="number"] {
             margin: 0;
-            width: 58px;
+            width: 54px;
             padding: 4px;
             font-size: 0.75rem;
             text-align: center;
             flex-shrink: 0;
         }
+
         .remove-stop-btn {
-            background: var(--danger);
-            color: white;
-            border: none;
+            background: transparent;
+            color: var(--color-text-muted);
+            border: 1px solid var(--color-border);
             width: 24px;
             height: 24px;
-            border-radius: 4px;
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            transition: background 0.2s;
+            transition: all var(--transition-fast);
+            padding: 0;
         }
-        .remove-stop-btn:hover:not(:disabled) { background: #e74c3c; }
-        .remove-stop-btn:disabled { background: #555; cursor: not-allowed; opacity: 0.4; }
+
+        .remove-stop-btn:hover:not(:disabled) {
+            background: var(--color-danger);
+            color: #ffffff;
+            border-color: var(--color-danger);
+        }
+
+        .remove-stop-btn:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
 
         /* --- Visualizers Column --- */
         .visualizer-column {
             flex: 2;
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: var(--space-5);
             min-width: 360px;
             max-width: 1050px;
         }
 
         .canvas-card {
-            background: var(--panel-bg);
-            padding: 16px;
-            border-radius: 12px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            background: var(--color-surface);
+            padding: var(--space-4);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-card);
             display: flex;
             flex-direction: column;
             align-items: center;
-            border: 1px solid #383838;
+            border: 1px solid var(--color-border);
             position: relative;
         }
-        
+
         .card-header {
             width: 100%;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 12px;
-            border-bottom: 1px solid #383838;
-            padding-bottom: 10px;
+            margin-bottom: var(--space-3);
+            border-bottom: 1px solid var(--color-border-subtle);
+            padding-bottom: var(--space-2);
             flex-wrap: wrap;
-            gap: 8px;
+            gap: var(--space-2);
         }
-        
+
         .card-title {
-            font-weight: bold;
-            color: var(--text);
-            font-size: 0.95rem;
+            font-weight: 600;
+            color: var(--color-text);
+            font-size: 0.9rem;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: var(--space-2);
+        }
+
+        .card-title .icon {
+            width: 18px;
+            height: 18px;
+            color: var(--color-primary);
         }
 
         .header-controls {
             display: flex;
             align-items: center;
-            gap: 8px;
+            gap: 6px;
             flex-wrap: wrap;
         }
 
         canvas#textureCanvas {
-            background-color: #1a1a1a;
-            image-rendering: auto;
+            background-color: var(--color-input);
             max-width: 100%;
             height: auto;
-            border-radius: 6px;
-            box-shadow: 0 6px 20px rgba(0,0,0,0.5);
-            border: 1px solid #444;
+            border-radius: var(--radius-md);
+            border: 1px solid var(--color-border);
         }
 
         #threeContainer {
             width: 100%;
             height: 420px;
-            background: #111;
-            border-radius: 6px;
+            background: #08090b;
+            border-radius: var(--radius-md);
             overflow: hidden;
             position: relative;
-            border: 1px solid #444;
+            border: 1px solid var(--color-border);
         }
 
         .viewport-badges {
             position: absolute;
-            bottom: 10px;
-            left: 10px;
+            bottom: var(--space-2);
+            left: var(--space-2);
             display: flex;
             gap: 6px;
             z-index: 5;
             pointer-events: none;
         }
+
         .v-badge {
-            background: rgba(0,0,0,0.7);
-            color: #ddd;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 0.72rem;
-            border: 1px solid #444;
+            background: rgba(15, 17, 21, 0.85);
+            color: var(--color-text-secondary);
+            padding: 2px 8px;
+            border-radius: var(--radius-sm);
+            font-size: 0.7rem;
+            border: 1px solid var(--color-border);
+            font-family: var(--font-mono);
         }
 
         /* --- Buttons --- */
-        .action-buttons { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
-        button.action-btn {
-            flex: 1; padding: 11px; border: none; border-radius: 6px;
-            font-weight: 600; cursor: pointer; transition: 0.2s;
-            text-transform: uppercase; font-size: 0.8rem;
-            display: flex; align-items: center; justify-content: center; gap: 6px;
+        .action-buttons {
+            display: flex;
+            gap: var(--space-2);
+            width: 100%;
+            margin-top: var(--space-4);
         }
-        .btn-generate { background-color: var(--primary); color: white; }
-        .btn-generate:hover { background-color: var(--primary-hover); }
-        .btn-random { background-color: var(--accent); color: white; }
-        .btn-random:hover { background-color: var(--accent-hover); }
-        .btn-download { background-color: var(--secondary); color: white; }
-        .btn-download:hover { background-color: #34495e; }
-        .btn-clear { background-color: var(--danger); color: white; }
-        .btn-clear:hover { background-color: #e74c3c; }
+
+        button.action-btn {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            cursor: pointer;
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+            font-size: 0.82rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            font-family: inherit;
+        }
+
+        .btn-generate {
+            background-color: var(--color-primary);
+            color: #ffffff;
+        }
+
+        .btn-generate:hover {
+            background-color: var(--color-primary-hover);
+        }
+
+        .btn-random {
+            background-color: var(--color-surface-header);
+            color: var(--color-text);
+            border-color: var(--color-border);
+        }
+
+        .btn-random:hover {
+            background-color: var(--color-surface-hover);
+            border-color: var(--color-text-muted);
+        }
+
+        .btn-download {
+            background-color: var(--color-secondary);
+            color: #ffffff;
+        }
+
+        .btn-download:hover {
+            background-color: var(--color-secondary-hover);
+        }
+
+        .btn-clear {
+            background-color: transparent;
+            color: var(--color-danger);
+            border: 1px solid var(--color-danger);
+        }
+
+        .btn-clear:hover {
+            background-color: var(--color-danger);
+            color: #ffffff;
+        }
+
         .btn-small {
-            padding: 5px 10px;
-            background: var(--success);
-            color: white;
-            border: none;
-            border-radius: 4px;
+            padding: 5px 9px;
+            background: var(--color-surface-header);
+            color: var(--color-text);
+            border: 1px solid var(--color-border);
+            border-radius: var(--radius-sm);
             cursor: pointer;
             font-size: 0.75rem;
-            font-weight: 600;
-            transition: filter 0.2s;
+            font-weight: 500;
             display: inline-flex;
             align-items: center;
-            gap: 4px;
+            gap: 5px;
+            transition: background var(--transition-fast), border-color var(--transition-fast);
+            font-family: inherit;
         }
-        .btn-small:hover { filter: brightness(1.15); }
 
-        /* Loader & Progress styling */
-        #loader {
-            position: absolute; top:0; left:0; width:100%; height:100%;
-            background: rgba(0,0,0,0.85); color: white;
-            display: flex; flex-direction: column; justify-content: center; align-items: center;
-            z-index: 10; pointer-events: none; opacity: 0; transition: opacity 0.2s;
-            text-align: center; font-weight: bold; font-size: 1.1rem;
+        .btn-small:hover {
+            background: var(--color-surface-hover);
+            border-color: var(--color-text-muted);
         }
-        #loader.active { opacity: 1; pointer-events: all; }
-        #loader span { font-size: 0.78rem; font-weight: normal; margin-top: 6px; color: #aaa; }
-        
+
+        button:focus-visible {
+            outline: 2px solid var(--color-border-focus);
+            outline-offset: 2px;
+        }
+
+        /* --- Loader Overlay --- */
+        #loader {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(14, 16, 20, 0.88);
+            color: var(--color-text);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity var(--transition-fast);
+            text-align: center;
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        #loader.active {
+            opacity: 1;
+            pointer-events: all;
+        }
+
+        #loader span {
+            font-size: 0.75rem;
+            font-weight: normal;
+            margin-top: 6px;
+            color: var(--color-text-secondary);
+        }
+
         #progressBarContainer {
             width: 75%;
-            max-width: 320px;
-            background: #333;
-            height: 8px;
-            border-radius: 4px;
-            margin: 14px 0 6px 0;
+            max-width: 280px;
+            background: var(--color-surface);
+            height: 6px;
+            border-radius: var(--radius-sm);
+            margin: 12px 0 6px 0;
             overflow: hidden;
-            border: 1px solid #555;
+            border: 1px solid var(--color-border);
         }
+
         #progressBar {
             height: 100%;
             width: 0%;
-            background: linear-gradient(90deg, var(--primary), #2ecc71);
-            transition: width 0.1s ease;
+            background: var(--color-primary);
+            transition: width 0.1s linear;
         }
 
-        /* Status Banner */
-        #uploadStatus { font-size: 0.8rem; color: #2ecc71; display: none; margin-bottom: 8px; }
-        #hwWarningBanner { background: #c0392b; color: white; padding: 10px; border-radius: 6px; font-size: 0.8rem; margin: 10px 0; display: none; text-align: left; line-height: 1.3; }
-        #canvasLimitInfo { font-size: 0.72rem; color: #888; margin-top: 4px; }
+        /* --- Status & Banners --- */
+        #uploadStatus {
+            font-size: 0.75rem;
+            color: var(--color-success);
+            display: none;
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        #hwWarningBanner {
+            background: #2b1111;
+            color: #fca5a5;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            font-size: 0.75rem;
+            margin: var(--space-2) 0;
+            display: none;
+            border: 1px solid #7f1d1d;
+            line-height: 1.4;
+        }
+
+        #canvasLimitInfo {
+            font-size: 0.72rem;
+            color: var(--color-text-muted);
+            margin-top: 2px;
+            font-family: var(--font-mono);
+        }
+
         #threeOfflineNotice {
             display: none;
-            padding: 40px 20px;
+            padding: 40px var(--space-4);
             text-align: center;
-            color: #ccc;
-            font-size: 0.9rem;
-            line-height: 1.5;
+            color: var(--color-text-secondary);
+            font-size: 0.85rem;
+            line-height: 1.6;
         }
 
-        /* Preset import / export row */
         .preset-io-row {
             display: flex;
             gap: 6px;
-            margin-top: 8px;
+            margin-top: var(--space-2);
         }
+
         .preset-io-row button {
             flex: 1;
             padding: 6px 8px;
-            font-size: 0.75rem;
+            font-size: 0.72rem;
         }
 
-        /* Channel switcher pill buttons */
+        /* --- Channel Switcher Pills --- */
         .channel-pills {
             display: flex;
             gap: 4px;
             flex-wrap: wrap;
         }
+
         .channel-pill {
-            padding: 4px 8px;
+            padding: 4px 9px;
             font-size: 0.72rem;
-            background: #333;
-            border: 1px solid #444;
-            color: #bbb;
-            border-radius: 4px;
+            background: var(--color-input);
+            border: 1px solid var(--color-border);
+            color: var(--color-text-secondary);
+            border-radius: var(--radius-sm);
             cursor: pointer;
-            transition: all 0.15s;
+            transition: all var(--transition-fast);
+            font-family: inherit;
         }
+
         .channel-pill.active {
-            background: var(--primary);
-            color: white;
-            border-color: var(--primary);
+            background: var(--color-primary);
+            color: #ffffff;
+            border-color: var(--color-primary);
             font-weight: 600;
+        }
+
+        .channel-pill:hover:not(.active) {
+            background: var(--color-surface-hover);
+            color: var(--color-text);
+        }
+
+        /* --- Responsive Styles --- */
+        @media (max-width: 960px) {
+            .main-container {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .controls-panel {
+                max-width: 100%;
+                min-width: 0;
+                max-height: none;
+            }
+            .visualizer-column {
+                max-width: 100%;
+                min-width: 0;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            * {
+                transition: none !important;
+                animation: none !important;
+            }
         }
     </style>
 </head>
 <body>
 
     <header>
-        <h1>Ultimate Texture Generator <span style="font-size:0.5em; color:var(--text-dim);">3D PRO</span></h1>
-        <div class="subtitle">Procedural PBR Material Engine • 4D Seamless Toroidal Noise • WebGL Viewport</div>
+        <h1>Texture Engine <span>3D Pro</span></h1>
+        <div class="subtitle">Multi-Threaded Procedural PBR Material Generator • 4D Toroidal Seamless Noise</div>
     </header>
 
-    <div class="main-container">
-        <!-- Controls Side -->
-        <div class="controls-panel">
+    <main class="main-container">
+        <!-- Controls Sidebar -->
+        <aside class="controls-panel" aria-label="Texture generation controls">
             
             <!-- Custom Image Upload & Seamless Blend -->
             <details>
-                <summary>Upload Custom Texture</summary>
+                <summary>
+                    <span>Upload Custom Image</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <p style="font-size: 0.78rem; color:#aaa; margin-top:0; line-height: 1.4;">
-                        Upload an image to process or generate normal, roughness, and height maps.
+                    <p style="font-size: 0.76rem; color: var(--color-text-secondary); margin-top: 0; line-height: 1.4;">
+                        Upload an external texture to process or derive Normal, Roughness, and Height maps.
                     </p>
-                    <input type="file" id="imageInput" accept="image/*">
-                    <div id="uploadStatus">✓ Custom Image Loaded Active</div>
+                    <input type="file" id="imageInput" accept="image/*" aria-label="Upload custom texture image">
+                    
+                    <div id="uploadStatus">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="20 6 9 17 4 12"/></svg>
+                        <span>Custom image active</span>
+                    </div>
                     
                     <div class="checkbox-row">
                         <input type="checkbox" id="seamlessBlendUpload">
-                        <label for="seamlessBlendUpload">Make Image Seamless (Edge Mirror Blend)</label>
+                        <label for="seamlessBlendUpload">Enable seamless mirror edge blend</label>
                     </div>
 
-                    <button class="action-btn btn-clear" id="clearImageBtn" style="width:100%; margin-top:6px;">Clear Image / Use Procedural</button>
+                    <button type="button" class="action-btn btn-clear" id="clearImageBtn" style="width: 100%; margin-top: 6px;">Clear Image / Return to Procedural</button>
                 </div>
             </details>
 
-            <!-- Style Preset & Resolution -->
+            <!-- Style Preset & Output Resolution -->
             <details open>
-                <summary>Generation & Resolution</summary>
+                <summary>
+                    <span>Presets & Resolution</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Style Preset</label>
+                    <label for="presetSelect">Material Preset</label>
                     <select id="presetSelect">
                         <option value="custom">Custom Configuration</option>
                         <option value="stone">Granite Stone (5 Colors)</option>
@@ -547,134 +799,166 @@
                     </select>
 
                     <div class="preset-io-row">
-                        <button class="btn-small" style="background:#555;" id="exportPresetBtn">💾 Export Preset (JSON)</button>
-                        <button class="btn-small" style="background:#555;" id="importPresetBtn">📂 Import Preset</button>
-                        <input type="file" id="presetFileInput" accept=".json" style="display:none;">
+                        <button type="button" class="btn-small" id="exportPresetBtn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+                            Export Preset
+                        </button>
+                        <button type="button" class="btn-small" id="importPresetBtn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                            Import Preset
+                        </button>
+                        <input type="file" id="presetFileInput" accept=".json" style="display:none;" aria-label="Upload preset JSON file">
                     </div>
                     
-                    <label style="margin-top:14px;">Output Resolution</label>
+                    <label for="resPreset" style="margin-top: 14px;">Resolution Preset</label>
                     <select id="resPreset">
-                        <option value="256x256" selected>Square 256x256 (Fast Preview)</option>
-                        <option value="512x512">Square 512x512 (Standard)</option>
-                        <option value="1024x1024">Square 1K (1024x1024)</option>
-                        <option value="2048x2048">Square 2K (2048x2048)</option>
-                        <option value="4096x4096">Square 4K (4096x4096 UHD)</option>
-                        <option value="1280x720">HD (720p) - 1280x720</option>
-                        <option value="1920x1080">Full HD (1080p) - 1920x1080</option>
-                        <option value="2560x1440">QHD (2K) - 2560x1440</option>
-                        <option value="3840x2160">4K UHD - 3840x2160</option>
-                        <option value="8192x8192">Square 8K (8192x8192 Heavy)</option>
+                        <option value="256x256" selected>256 × 256 (Fast Preview)</option>
+                        <option value="512x512">512 × 512 (Standard)</option>
+                        <option value="1024x1024">1024 × 1024 (1K Texture)</option>
+                        <option value="2048x2048">2048 × 2048 (2K Texture)</option>
+                        <option value="4096x4096">4096 × 4096 (4K UHD)</option>
+                        <option value="1280x720">1280 × 720 (720p HD)</option>
+                        <option value="1920x1080">1920 × 1080 (1080p FHD)</option>
+                        <option value="2560x1440">2560 × 1440 (1440p QHD)</option>
+                        <option value="3840x2160">3840 × 2160 (4K UHD)</option>
+                        <option value="8192x8192">8192 × 8192 (8K Heavy)</option>
                         <option value="custom">Custom Dimensions</option>
                     </select>
 
                     <div class="row">
-                        <input type="number" id="texWidth" value="256" placeholder="W" min="16" max="16384">
-                        <span style="color:#888;">×</span>
-                        <input type="number" id="texHeight" value="256" placeholder="H" min="16" max="16384">
+                        <input type="number" id="texWidth" value="256" placeholder="Width" min="16" max="16384" aria-label="Texture width in pixels">
+                        <span style="color: var(--color-text-muted);">×</span>
+                        <input type="number" id="texHeight" value="256" placeholder="Height" min="16" max="16384" aria-label="Texture height in pixels">
                     </div>
-                    <div id="canvasLimitInfo">Detecting hardware limits...</div>
+                    <div id="canvasLimitInfo">Detecting hardware boundaries...</div>
                     <div id="hwWarningBanner"></div>
 
-                    <label style="margin-top:12px;">Seed (Randomness)</label>
+                    <label for="seed" style="margin-top: 12px;">Seed</label>
                     <div class="row">
-                        <input type="number" id="seed" value="12345">
-                        <button class="btn-small" style="background:var(--accent)" id="newSeedBtn" title="Randomize Seed">🎲</button>
+                        <input type="number" id="seed" value="12345" aria-label="Procedural noise random seed">
+                        <button type="button" class="btn-small" id="newSeedBtn" aria-label="Randomize seed" title="Randomize seed">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+                        </button>
                     </div>
                 </div>
             </details>
 
             <!-- Base Noise Algorithm -->
             <details open>
-                <summary>Base Noise Algorithm</summary>
+                <summary>
+                    <span>Noise Algorithm & Synthesis</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Algorithm</label>
+                    <label for="noiseType">Algorithm</label>
                     <select id="noiseType">
-                        <option value="simplex">Simplex Noise (Smooth & Fast)</option>
+                        <option value="simplex">Simplex Noise (Smooth & Isotropic)</option>
                         <option value="perlin" selected>Perlin Noise (Classic Natural)</option>
                         <option value="value">Value Noise (Blocky Organic)</option>
-                        <option value="worley">Worley (Cellular / Bubbles / Voronoi)</option>
+                        <option value="worley">Worley (Cellular / Voronoi)</option>
                     </select>
 
-                    <label>Scale (Zoom): <span class="val" id="scaleVal">50</span></label>
+                    <label for="scale">Scale: <span class="val" id="scaleVal">50</span></label>
                     <input type="range" id="scale" min="5" max="300" value="50">
 
-                    <label>Detail Layers (Octaves): <span class="val" id="octavesVal">4</span></label>
+                    <label for="octaves">Octaves: <span class="val" id="octavesVal">4</span></label>
                     <input type="range" id="octaves" min="1" max="10" value="4">
 
-                    <label>Roughness (Persistence): <span class="val" id="persistenceVal">0.5</span></label>
+                    <label for="persistence">Persistence (Roughness): <span class="val" id="persistenceVal">0.5</span></label>
                     <input type="range" id="persistence" min="0" max="1" step="0.05" value="0.5">
                     
-                    <label>Detail Size (Lacunarity): <span class="val" id="lacunarityVal">2.0</span></label>
+                    <label for="lacunarity">Lacunarity: <span class="val" id="lacunarityVal">2.0</span></label>
                     <input type="range" id="lacunarity" min="1" max="4" step="0.1" value="2.0">
 
                     <div class="checkbox-row">
                         <input type="checkbox" id="ridged">
-                        <label for="ridged">Ridged Mode (Sharp Peaks / Canyons)</label>
+                        <label for="ridged">Ridged mode (Inverted sharp peaks)</label>
                     </div>
                 </div>
             </details>
 
-            <!-- Infinite Color & Gradient Engine -->
+            <!-- Color Palette & Infinite Gradient -->
             <details open>
-                <summary>Color & Infinite Gradient</summary>
+                <summary>
+                    <span>Color Palette & Gradient</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Quick Color Palettes</label>
+                    <label for="quickPaletteSelect">Preset Palette</label>
                     <select id="quickPaletteSelect">
-                        <option value="">-- Choose Palette Preset --</option>
-                        <option value="bw">Black & White (2 stops)</option>
-                        <option value="fire">Fire / Magma (6 stops)</option>
-                        <option value="rainbow">Rainbow Spectrum (7 stops)</option>
+                        <option value="">Choose palette...</option>
+                        <option value="bw">Monochrome Black & White (2 stops)</option>
+                        <option value="fire">Fire & Magma (6 stops)</option>
+                        <option value="rainbow">Full Spectrum (7 stops)</option>
                         <option value="cyberpunk">Cyberpunk Neon (5 stops)</option>
-                        <option value="ocean">Ocean Depth (6 stops)</option>
+                        <option value="ocean">Ocean Depths (6 stops)</option>
                         <option value="forest">Forest Moss (6 stops)</option>
                         <option value="sunset">Sunset Glow (6 stops)</option>
                         <option value="gold">Golden Luxury (6 stops)</option>
                         <option value="toxic">Toxic Slime (5 stops)</option>
-                        <option value="hologram">Holographic (6 stops)</option>
+                        <option value="hologram">Holographic Spectrum (6 stops)</option>
                         <option value="marble">White Marble (5 stops)</option>
                         <option value="sand">Desert Dune (5 stops)</option>
                     </select>
 
-                    <label>Gradient Preview <span style="font-size:0.72rem; color:#888;">(Click bar to add stop)</span></label>
-                    <div id="gradient-preview" title="Click anywhere on the bar to sample and add a color stop"></div>
-                    <span class="gradient-helper-text">💡 Click directly on the bar to sample & insert color stops</span>
+                    <label id="gradientPreviewLabel">Gradient Ramp <span style="font-size:0.72rem; color:var(--color-text-muted);">(Click bar to sample & add)</span></label>
+                    <div id="gradient-preview" role="button" tabindex="0" aria-labelledby="gradientPreviewLabel" title="Click directly on the ramp to insert a color stop"></div>
+                    <span class="gradient-helper-text">Click along the ramp to sample and insert a stop at that exact position.</span>
 
                     <div class="gradient-btn-row">
-                        <button class="btn-small" id="addStopBtn">+ Add Stop</button>
-                        <button class="btn-small" style="background:#8e44ad;" id="distributeStopsBtn">↔ Distribute</button>
-                        <button class="btn-small" style="background:#d35400;" id="reverseGradientBtn">🔄 Reverse</button>
-                        <button class="btn-small" style="background:#16a085;" id="randomGradientBtn">🎲 Palette</button>
+                        <button type="button" class="btn-small" id="addStopBtn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                            Add Stop
+                        </button>
+                        <button type="button" class="btn-small" id="distributeStopsBtn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="18 8 22 12 18 16"/><polyline points="6 8 2 12 6 16"/><line x1="2" y1="12" x2="22" y2="12"/></svg>
+                            Distribute
+                        </button>
+                        <button type="button" class="btn-small" id="reverseGradientBtn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
+                            Reverse
+                        </button>
+                        <button type="button" class="btn-small" id="randomGradientBtn">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2z"/></svg>
+                            Random
+                        </button>
                     </div>
 
                     <div id="gradient-stops-list"></div>
                 </div>
             </details>
 
-            <!-- Distortion (FBM Warp) -->
+            <!-- Domain Warping / Turbulence -->
             <details>
-                <summary>Distortion (FBM Domain Warping)</summary>
+                <summary>
+                    <span>Domain Warping (Turbulence)</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Warp Strength: <span class="val" id="turbStrengthVal">0</span></label>
+                    <label for="turbStrength">Warp Strength: <span class="val" id="turbStrengthVal">0</span></label>
                     <input type="range" id="turbStrength" min="0" max="200" value="0">
 
-                    <label>Warp Scale: <span class="val" id="turbScaleVal">50</span></label>
+                    <label for="turbScale">Warp Scale: <span class="val" id="turbScaleVal">50</span></label>
                     <input type="range" id="turbScale" min="10" max="200" value="50">
                 </div>
             </details>
 
-            <!-- Worley / Cellular Settings -->
+            <!-- Cellular / Worley Parameters -->
             <details>
-                <summary>Worley / Cellular Settings</summary>
+                <summary>
+                    <span>Cellular & Worley Metrics</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Calculation Function</label>
+                    <label for="worleyType">Feature Function</label>
                     <select id="worleyType">
-                        <option value="f1">F1 (Cell Centers / Closest Point)</option>
-                        <option value="f2">F2 (Secondary Boundary)</option>
+                        <option value="f1">F1 (Cell Center / Closest Distance)</option>
+                        <option value="f2">F2 (Secondary Boundary Distance)</option>
                         <option value="f2-f1">F2 − F1 (Voronoi Borders / Cell Walls)</option>
                         <option value="f1+f2">F1 + F2 (Smooth Ridges)</option>
                     </select>
                     
-                    <label>Distance Metric</label>
+                    <label for="worleyDist">Distance Metric</label>
                     <select id="worleyDist">
                         <option value="euclidean">Euclidean (Smooth / Organic)</option>
                         <option value="manhattan">Manhattan (Diamond / Grid)</option>
@@ -684,137 +968,157 @@
                 </div>
             </details>
 
-            <!-- Post Processing -->
+            <!-- Post-Processing & Filtering -->
             <details>
-                <summary>Post Processing</summary>
+                <summary>
+                    <span>Post-Processing & Adjustment</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Contrast: <span class="val" id="contrastVal">1.0</span></label>
+                    <label for="contrast">Contrast: <span class="val" id="contrastVal">1.0</span></label>
                     <input type="range" id="contrast" min="0" max="3" step="0.1" value="1.0">
 
-                    <label>Brightness: <span class="val" id="brightnessVal">0.0</span></label>
+                    <label for="brightness">Brightness: <span class="val" id="brightnessVal">0.0</span></label>
                     <input type="range" id="brightness" min="-1" max="1" step="0.05" value="0.0">
 
                     <div class="checkbox-row">
                         <input type="checkbox" id="invert">
-                        <label for="invert">Invert Colors / Height</label>
+                        <label for="invert">Invert colors and height</label>
                     </div>
                     
                     <div class="checkbox-row">
                         <input type="checkbox" id="thresholdEnable">
-                        <label for="thresholdEnable">Hard Threshold (Binarize)</label>
+                        <label for="thresholdEnable">Hard threshold (Binarize output)</label>
                     </div>
                     
-                    <label>Threshold Level: <span class="val" id="thresholdVal">0.5</span></label>
+                    <label for="threshold">Threshold Level: <span class="val" id="thresholdVal">0.5</span></label>
                     <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
                 </div>
             </details>
             
-            <!-- Material & 3D Lighting Settings -->
+            <!-- Material & 3D Lighting -->
             <details open>
-                <summary>Material & 3D Settings</summary>
+                <summary>
+                    <span>Material & 3D Shading</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
-                    <label>Normal/Bump Depth: <span class="val" id="bumpScaleVal">0.3</span></label>
+                    <label for="bumpScale">Normal Map Bump Depth: <span class="val" id="bumpScaleVal">0.3</span></label>
                     <input type="range" id="bumpScale" min="0" max="2" step="0.05" value="0.3">
 
-                    <label>Displacement Scale: <span class="val" id="displacementScaleVal">0.05</span></label>
+                    <label for="displacementScale">Displacement Depth: <span class="val" id="displacementScaleVal">0.05</span></label>
                     <input type="range" id="displacementScale" min="0" max="0.3" step="0.01" value="0.05">
 
-                    <label>Material Roughness: <span class="val" id="matRoughnessVal">0.6</span></label>
+                    <label for="matRoughness">Surface Roughness: <span class="val" id="matRoughnessVal">0.6</span></label>
                     <input type="range" id="matRoughness" min="0" max="1" step="0.05" value="0.6">
 
-                    <label>Material Metalness: <span class="val" id="matMetalnessVal">0.1</span></label>
+                    <label for="matMetalness">Surface Metalness: <span class="val" id="matMetalnessVal">0.1</span></label>
                     <input type="range" id="matMetalness" min="0" max="1" step="0.05" value="0.1">
 
-                    <label>Ambient Occlusion Intensity: <span class="val" id="aoIntensityVal">1.0</span></label>
+                    <label for="aoIntensity">Ambient Occlusion Intensity: <span class="val" id="aoIntensityVal">1.0</span></label>
                     <input type="range" id="aoIntensity" min="0" max="2" step="0.1" value="1.0">
                 </div>
             </details>
 
-            <!-- Advanced / Pipeline Settings -->
+            <!-- Advanced & Pipeline Settings -->
             <details>
-                <summary>Advanced / Pipeline Settings</summary>
+                <summary>
+                    <span>Pipeline & Tiling Options</span>
+                    <svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </summary>
                 <div class="control-group">
                     <div class="checkbox-row">
                         <input type="checkbox" id="seamlessTilingCheckbox" checked>
-                        <label for="seamlessTilingCheckbox">Seamless Tiling (4D Toroidal Mapping)</label>
+                        <label for="seamlessTilingCheckbox">Toroidal 4D seamless tiling</label>
                     </div>
                     <div class="checkbox-row">
                         <input type="checkbox" id="livePreviewToggle" checked>
-                        <label for="livePreviewToggle">Live Preview Streaming</label>
+                        <label for="livePreviewToggle">Real-time preview streaming</label>
                     </div>
                     <div class="checkbox-row">
                         <input type="checkbox" id="directXNormalCheckbox">
-                        <label for="directXNormalCheckbox">DirectX Normal Map (-Y Inverted)</label>
+                        <label for="directXNormalCheckbox">DirectX normal map format (−Y inverted)</label>
                     </div>
-                    <label>Normal Map Filter Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
+                    <label for="normalStrength">Normal Filter Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
                     <input type="range" id="normalStrength" min="0.5" max="10.0" step="0.1" value="3.0">
                 </div>
             </details>
 
             <div class="action-buttons">
-                <button class="action-btn btn-random" id="randomBtn">🎲 Randomize All</button>
-                <button class="action-btn btn-generate" id="generateBtn">⚡ Force Render</button>
+                <button type="button" class="action-btn btn-random" id="randomBtn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="15.5" r="1.5" fill="currentColor"/><circle cx="15.5" cy="8.5" r="1.5" fill="currentColor"/><circle cx="8.5" cy="15.5" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+                    Randomize
+                </button>
+                <button type="button" class="action-btn btn-generate" id="generateBtn">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor"/></svg>
+                    Force Render
+                </button>
             </div>
-        </div>
+        </aside>
 
-        <!-- Visualizer Column -->
-        <div class="visualizer-column">
+        <!-- Visualizer Area -->
+        <section class="visualizer-column" aria-label="Texture visualizers and viewport">
             
-            <!-- 3D Preview Card -->
+            <!-- 3D Viewport Card -->
             <div class="canvas-card">
                 <div class="card-header">
-                    <span class="card-title">🌐 3D Real-Time PBR Viewport</span>
+                    <span class="card-title">
+                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                        3D PBR Viewport
+                    </span>
                     <div class="header-controls">
-                        <!-- Channel inspection -->
-                        <select id="viewportChannel" style="width: auto; margin:0; padding: 4px 6px; font-size: 0.78rem;">
-                            <option value="lit">View: Full Lit PBR</option>
-                            <option value="diffuse">View: Diffuse Only</option>
-                            <option value="normal">View: Normal Map</option>
-                            <option value="height">View: Height Map</option>
-                            <option value="roughness">View: Roughness Map</option>
-                            <option value="ao">View: Ambient Occlusion</option>
+                        <select id="viewportChannel" aria-label="3D Viewport inspection channel" style="width: auto; margin: 0; padding: 4px 6px;">
+                            <option value="lit">Full Lit PBR</option>
+                            <option value="diffuse">Diffuse Channel</option>
+                            <option value="normal">Normal Map</option>
+                            <option value="height">Height Map</option>
+                            <option value="roughness">Roughness Map</option>
+                            <option value="ao">Ambient Occlusion</option>
                         </select>
 
-                        <!-- Mesh selector -->
-                        <select id="meshSelect" style="width: auto; margin:0; padding: 4px 6px; font-size: 0.78rem;">
-                            <option value="block">Block (Cube)</option>
-                            <option value="sphere" selected>Ball (Sphere)</option>
+                        <select id="meshSelect" aria-label="3D mesh geometry" style="width: auto; margin: 0; padding: 4px 6px;">
+                            <option value="block">Cube</option>
+                            <option value="sphere" selected>Sphere</option>
                             <option value="torusKnot">Torus Knot</option>
                             <option value="cylinder">Cylinder</option>
                             <option value="wedge">Wedge</option>
                             <option value="cornerWedge">Corner Wedge</option>
-                            <option value="torus">Torus (Donut)</option>
-                            <option value="plane">Plane (Flat)</option>
+                            <option value="torus">Torus</option>
+                            <option value="plane">Plane</option>
                             <option value="cone">Cone</option>
                             <option value="icosahedron">Icosahedron</option>
                         </select>
 
-                        <!-- Tiling Repeat -->
-                        <select id="tilingRepeatSelect" style="width: auto; margin:0; padding: 4px 6px; font-size: 0.78rem;">
-                            <option value="1">1×1 Tile</option>
-                            <option value="2" selected>2×2 Tiles</option>
-                            <option value="4">4×4 Tiles</option>
-                            <option value="8">8×8 Tiles</option>
+                        <select id="tilingRepeatSelect" aria-label="UV tiling repetition" style="width: auto; margin: 0; padding: 4px 6px;">
+                            <option value="1">1 × 1</option>
+                            <option value="2" selected>2 × 2</option>
+                            <option value="4">4 × 4</option>
+                            <option value="8">8 × 8</option>
                         </select>
 
-                        <!-- Controls -->
-                        <button class="btn-small" style="background:#444;" id="toggleRotateBtn" title="Toggle Auto-Rotation">⏸</button>
-                        <button class="btn-small" style="background:#444;" id="toggleWireframeBtn" title="Toggle Wireframe">🕸</button>
-                        <button class="btn-small" style="background:#444;" id="resetCameraBtn" title="Reset Camera">🎯</button>
+                        <button type="button" class="btn-small" id="toggleRotateBtn" aria-label="Pause or resume auto-rotation" title="Toggle Auto-Rotation">
+                            <svg id="rotateIcon" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+                        </button>
+                        <button type="button" class="btn-small" id="toggleWireframeBtn" aria-label="Toggle wireframe display" title="Toggle Wireframe">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M3 15h18"/><path d="M9 3v18"/><path d="M15 3v18"/></svg>
+                        </button>
+                        <button type="button" class="btn-small" id="resetCameraBtn" aria-label="Reset camera orientation" title="Reset Camera">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="22" y1="12" x2="18" y2="12"/><line x1="6" y1="12" x2="2" y2="12"/><line x1="12" y1="6" x2="12" y2="2"/><line x1="12" y1="22" x2="12" y2="18"/></svg>
+                        </button>
                     </div>
                 </div>
 
                 <div id="threeContainer">
                     <div id="threeOfflineNotice">
-                        ⚠️ <strong>3D WebGL Viewport is currently offline</strong> (Three.js CDN unreachable or blocked).<br>
-                        Procedural 2D Texture generation, PBR maps, and high-res exports are 100% operational below.
+                        3D WebGL Viewport is currently unavailable (offline or CDN blocked).<br>
+                        Procedural 2D Texture generation, PBR maps, and exports remain operational.
                     </div>
-                    <div id="loader">
+                    <div id="loader" role="status" aria-live="polite">
                         <div id="loaderText">Initializing Workers...</div>
                         <div id="progressBarContainer">
                             <div id="progressBar"></div>
                         </div>
-                        <span>Multi-threaded procedural chunk generation.</span>
+                        <span>Multi-threaded procedural generation in progress.</span>
                     </div>
                     <div class="viewport-badges">
                         <span class="v-badge" id="vMeshBadge">Sphere</span>
@@ -827,32 +1131,41 @@
             <!-- 2D Texture Map Card -->
             <div class="canvas-card">
                 <div class="card-header">
-                    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-                        <span class="card-title">🗺 2D Map Inspection</span>
-                        <div class="channel-pills">
-                            <button class="channel-pill active" data-map="diffuse">Diffuse</button>
-                            <button class="channel-pill" data-map="normal">Normal</button>
-                            <button class="channel-pill" data-map="height">Height</button>
-                            <button class="channel-pill" data-map="roughness">Roughness</button>
-                            <button class="channel-pill" data-map="ao">Ambient Occlusion</button>
+                    <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+                        <span class="card-title">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+                            2D Map Output
+                        </span>
+                        <div class="channel-pills" role="tablist" aria-label="Texture map selection">
+                            <button type="button" class="channel-pill active" data-map="diffuse" role="tab" aria-selected="true">Diffuse</button>
+                            <button type="button" class="channel-pill" data-map="normal" role="tab" aria-selected="false">Normal</button>
+                            <button type="button" class="channel-pill" data-map="height" role="tab" aria-selected="false">Height</button>
+                            <button type="button" class="channel-pill" data-map="roughness" role="tab" aria-selected="false">Roughness</button>
+                            <button type="button" class="channel-pill" data-map="ao" role="tab" aria-selected="false">Ambient Occlusion</button>
                         </div>
                     </div>
                     <div class="header-controls">
-                        <button class="btn-small btn-download" id="downloadCurrentBtn">📥 Download Current</button>
-                        <button class="btn-small" style="background:#8e44ad;" id="downloadAllPbrBtn">📦 Download All Maps</button>
+                        <button type="button" class="btn-small btn-download" id="downloadCurrentBtn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                            Download Map
+                        </button>
+                        <button type="button" class="btn-small" id="downloadAllPbrBtn">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+                            Export All Maps
+                        </button>
                     </div>
                 </div>
 
                 <canvas id="textureCanvas" width="256" height="256"></canvas>
             </div>
 
-        </div>
-    </div>
+        </section>
+    </main>
 
 <script>
 /**
- * INLINED NOISE WORKER SOURCE
- * Synchronized with noiseWorker.js. Guaranteed to run in file://, http://, and offline.
+ * INLINED PROCEDURAL NOISE WORKER SCRIPT
+ * Synchronized with noiseWorker.js for zero-CORS local & remote execution.
  */
 const inlineWorkerSource = `
 class SeededRandom {
@@ -1337,7 +1650,7 @@ self.onmessage = function(e) {
 };
 `;
 
-// --- 1. MULTI-TIER WORKER LOADER (NATIVE & BLOB HYBRID) ---
+// --- 1. MULTI-TIER WORKER LOADER ---
 let workerBlobURL = null;
 let preferExternalWorker = (location.protocol === 'http:' || location.protocol === 'https:');
 
@@ -1382,7 +1695,7 @@ function detectHardwareCapabilities() {
 
     const infoEl = document.getElementById('canvasLimitInfo');
     if (infoEl) {
-        infoEl.innerText = `Hardware: ~${detectedCanvasLimit}px canvas limit • Max GPU Texture: ${maxGpuTextureSize}px`;
+        infoEl.innerText = `Hardware: ~${detectedCanvasLimit}px canvas boundary • Max GPU Texture: ${maxGpuTextureSize}px`;
     }
 }
 
@@ -1409,20 +1722,19 @@ function checkResolutionSupport() {
     const genBtn = document.getElementById('generateBtn');
 
     if (!testCanvasAllocation(w, h)) {
-        let suggested = detectedCanvasLimit >= 4096 ? "4096×4096 (4K)" : "2048×2048 (2K)";
-        banner.innerHTML = `⚠️ Your browser cannot allocate [${w}×${h}] canvas buffer safely.<br>Maximum stable dimension is ~[${detectedCanvasLimit}px]. Recommended: ${suggested}.`;
+        let suggested = detectedCanvasLimit >= 4096 ? "4096 × 4096" : "2048 × 2048";
+        banner.innerHTML = `Warning: Device canvas allocation boundary exceeded for [${w} × ${h}]. Maximum stable dimension is ~[${detectedCanvasLimit}px]. Recommended: ${suggested}.`;
         banner.style.display = 'block';
         genBtn.disabled = true;
         genBtn.innerText = 'Resolution Unsupported';
-        genBtn.style.backgroundColor = '#555';
-        genBtn.style.cursor = 'not-allowed';
         return false;
     } else {
         banner.style.display = 'none';
         genBtn.disabled = false;
-        genBtn.innerText = '⚡ Force Render';
-        genBtn.style.backgroundColor = '';
-        genBtn.style.cursor = '';
+        genBtn.innerHTML = `
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" fill="currentColor"/></svg>
+            Force Render
+        `;
         return true;
     }
 }
@@ -1445,7 +1757,7 @@ class ThreeController {
         this.currentChannel = 'lit';
 
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(0x111111);
+        this.scene.background = new THREE.Color(0x0a0c10);
 
         const w = Math.max(10, this.container.clientWidth);
         const h = Math.max(10, this.container.clientHeight);
@@ -1462,24 +1774,23 @@ class ThreeController {
         this.controls.enableDamping = true;
         this.controls.dampingFactor = 0.05;
 
-        // Lighting Rig
-        const ambient = new THREE.AmbientLight(0xffffff, 0.4);
+        // Lighting rig
+        const ambient = new THREE.AmbientLight(0xffffff, 0.45);
         const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
         keyLight.position.set(5, 10, 7);
-        const rimLight = new THREE.DirectionalLight(0x70a0ff, 0.45);
+        const rimLight = new THREE.DirectionalLight(0x70a0ff, 0.4);
         rimLight.position.set(-6, -8, -6);
-        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.35);
+        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.3);
         fillLight.position.set(6, 0, -5);
         this.scene.add(ambient, keyLight, rimLight, fillLight);
 
-        const gridHelper = new THREE.GridHelper(10, 10, 0x333333, 0x222222);
+        const gridHelper = new THREE.GridHelper(10, 10, 0x222631, 0x161922);
         gridHelper.position.y = -0.7;
         this.scene.add(gridHelper);
 
         this.mesh = null;
         this.currentMeshType = 'sphere';
 
-        // PBR Material Setup
         this.material = new THREE.MeshStandardMaterial({
             color: 0xffffff,
             roughness: 0.6,
@@ -1512,7 +1823,7 @@ class ThreeController {
         this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.65, 16);
         this.geometries.torusKnot = new THREE.TorusKnotGeometry(0.38, 0.13, 120, 20);
 
-        // Accurate Wedge Geometry with UVs & computed Normals
+        // Buffer geometry for wedge
         const wedgeGeo = new THREE.BufferGeometry();
         const wedgeVerts = new Float32Array([
             -0.5, -0.5, 0.5,   0.5, -0.5, 0.5,  -0.5, -0.5, -0.5,
@@ -1535,7 +1846,7 @@ class ThreeController {
         wedgeGeo.computeVertexNormals();
         this.geometries.wedge = wedgeGeo;
 
-        // Accurate Corner Wedge Geometry
+        // Buffer geometry for corner wedge
         const cornerGeo = new THREE.BufferGeometry();
         const cornerVerts = new Float32Array([
             -0.5, -0.5, 0.5,  0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
@@ -1782,7 +2093,7 @@ function init() {
         }
     });
 
-    // Buttons & Actions
+    // Action handlers
     document.getElementById('generateBtn').addEventListener('click', generateTexture);
     document.getElementById('randomBtn').addEventListener('click', randomizeAll);
     document.getElementById('newSeedBtn').addEventListener('click', () => {
@@ -1790,21 +2101,21 @@ function init() {
         generateTexture();
     });
 
-    // Image Upload & Clear
+    // Image upload handlers
     document.getElementById('imageInput').addEventListener('change', handleImageUpload);
     document.getElementById('clearImageBtn').addEventListener('click', clearImageUpload);
 
-    // 2D Map Downloads
+    // Downloads
     document.getElementById('downloadCurrentBtn').addEventListener('click', downloadCurrentViewMap);
     document.getElementById('downloadAllPbrBtn').addEventListener('click', downloadAllPbrMaps);
 
-    // Preset Import/Export
+    // Preset import & export
     document.getElementById('exportPresetBtn').addEventListener('click', exportPresetJSON);
     document.getElementById('importPresetBtn').addEventListener('click', () => document.getElementById('presetFileInput').click());
     document.getElementById('presetFileInput').addEventListener('change', importPresetJSON);
     document.getElementById('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
 
-    // Gradient Controls
+    // Gradient management
     document.getElementById('addStopBtn').addEventListener('click', () => addGradientStop(0.5, "#3498db"));
     document.getElementById('distributeStopsBtn').addEventListener('click', distributeStopsEvenly);
     document.getElementById('reverseGradientBtn').addEventListener('click', reverseGradient);
@@ -1816,7 +2127,7 @@ function init() {
         }
     });
 
-    // Interactive Bar Stop Insertion
+    // Direct ramp sampling
     document.getElementById('gradient-preview').addEventListener('click', (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const clickPos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
@@ -1824,7 +2135,7 @@ function init() {
         addGradientStop(parseFloat(clickPos.toFixed(3)), sampledColor);
     });
 
-    // 3D Viewport Controls
+    // Viewport control bindings
     document.getElementById('viewportChannel').addEventListener('change', (e) => {
         if (threeView) threeView.updateViewportChannel(e.target.value);
     });
@@ -1834,30 +2145,42 @@ function init() {
     document.getElementById('tilingRepeatSelect').addEventListener('change', (e) => {
         if (threeView) threeView.setTilingRepeat(parseInt(e.target.value));
     });
+
     document.getElementById('toggleRotateBtn').addEventListener('click', () => {
         if (!threeView) return;
         threeView.autoRotate = !threeView.autoRotate;
-        document.getElementById('toggleRotateBtn').innerText = threeView.autoRotate ? '⏸' : '▶';
+        const icon = document.getElementById('rotateIcon');
+        if (threeView.autoRotate) {
+            icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+        } else {
+            icon.innerHTML = '<polygon points="5 3 19 12 5 21 5 3"/>';
+        }
     });
+
     document.getElementById('toggleWireframeBtn').addEventListener('click', () => {
         if (!threeView || !threeView.material) return;
         threeView.material.wireframe = !threeView.material.wireframe;
     });
+
     document.getElementById('resetCameraBtn').addEventListener('click', () => {
         if (threeView) threeView.resetCamera();
     });
 
-    // 2D Channel Switcher Pills
+    // 2D Map Pill selection
     document.querySelectorAll('.channel-pill').forEach(pill => {
         pill.addEventListener('click', (e) => {
-            document.querySelectorAll('.channel-pill').forEach(p => p.classList.remove('active'));
+            document.querySelectorAll('.channel-pill').forEach(p => {
+                p.classList.remove('active');
+                p.setAttribute('aria-selected', 'false');
+            });
             e.currentTarget.classList.add('active');
+            e.currentTarget.setAttribute('aria-selected', 'true');
             state.currentViewMap = e.currentTarget.getAttribute('data-map');
             render2DCanvasView();
         });
     });
 
-    // Keyboard Shortcuts
+    // Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
         if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
         if (e.code === 'KeyR') {
@@ -1894,7 +2217,7 @@ function handleImageUpload(e) {
         const img = new Image();
         img.onload = () => {
             state.uploadedImage = img;
-            document.getElementById('uploadStatus').style.display = 'block';
+            document.getElementById('uploadStatus').style.display = 'flex';
             generateTexture();
         };
         img.src = event.target.result;
@@ -2104,9 +2427,9 @@ const quickPalettes = {
         { pos: 1.0, color: "#ffffff" }
     ],
     sand: [
-        { pos: 0.0, color: "#543008" }, { pos: 0.25, color: "#8c561b" },
-        { pos: 0.55, color: "#c98f49" }, { pos: 0.8, color: "#e6be7e" },
-        { pos: 1.0, color: "#f5e4c6" }
+        { pos: 0.0, color: "#472b0c" }, { pos: 0.25, color: "#7a4c19" },
+        { pos: 0.55, color: "#ba8443" }, { pos: 0.8, color: "#e3b878" },
+        { pos: 1.0, color: "#faecc8" }
     ]
 };
 
@@ -2128,10 +2451,12 @@ function renderGradientUI() {
         const isOnlyStop = state.gradientStops.length <= 1;
 
         item.innerHTML = `
-            <input type="color" value="${stop.color}" class="stop-color" title="Pick Stop Color">
-            <input type="range" min="0" max="1" step="0.01" value="${stop.pos}" class="stop-slider" title="Drag Stop Position">
-            <input type="number" min="0" max="1" step="0.01" value="${stop.pos}" class="stop-num" title="Exact Position (0.0 - 1.0)">
-            <button class="remove-stop-btn" ${isOnlyStop ? 'disabled' : ''} title="Delete Stop">×</button>
+            <input type="color" value="${stop.color}" class="stop-color" aria-label="Stop color">
+            <input type="range" min="0" max="1" step="0.01" value="${stop.pos}" class="stop-slider" aria-label="Stop position">
+            <input type="number" min="0" max="1" step="0.01" value="${stop.pos}" class="stop-num" aria-label="Exact position">
+            <button type="button" class="remove-stop-btn" ${isOnlyStop ? 'disabled' : ''} aria-label="Delete stop">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
         `;
 
         const colInput = item.querySelector('.stop-color');
@@ -2185,7 +2510,7 @@ function updateGradientPreview() {
     document.getElementById('gradient-preview').style.background = `linear-gradient(to right, ${css})`;
 }
 
-// --- 7. FAST PBR MAP FILTERS (SOBEL NORMAL, HEIGHT, ROUGHNESS, AO) ---
+// --- 7. PBR MAP FILTERS ---
 function generateAllPbrMaps() {
     const w = state.canvas.width;
     const h = state.canvas.height;
@@ -2221,7 +2546,7 @@ function generateAllPbrMaps() {
     hCtx.putImageData(hImgData, 0, 0);
     state.heightCanvas = heightCanvas;
 
-    // 2. High-Performance Sobel Normal Map (with Toroidal Seamless Boundary Wrap)
+    // 2. Sobel Normal Map Filter
     const normalCanvas = state.normalCanvas || document.createElement('canvas');
     normalCanvas.width = w;
     normalCanvas.height = h;
@@ -2272,7 +2597,7 @@ function generateAllPbrMaps() {
     nCtx.putImageData(nImgData, 0, 0);
     state.normalCanvas = normalCanvas;
 
-    // 3. Roughness Map
+    // 3. Roughness Map Filter
     const roughnessCanvas = state.roughnessCanvas || document.createElement('canvas');
     roughnessCanvas.width = w;
     roughnessCanvas.height = h;
@@ -2293,7 +2618,7 @@ function generateAllPbrMaps() {
     rCtx.putImageData(rImgData, 0, 0);
     state.roughnessCanvas = roughnessCanvas;
 
-    // 4. Ambient Occlusion Map (Screen-Space Cavity / Crevice Darkness)
+    // 4. Ambient Occlusion Screen-Space Cavity Map
     const aoCanvas = state.aoCanvas || document.createElement('canvas');
     aoCanvas.width = w;
     aoCanvas.height = h;
@@ -2315,7 +2640,6 @@ function generateAllPbrMaps() {
                 heightArr[y * w + xm1] + heightArr[y * w + xp1]
             ) * 0.25;
 
-            // Crevices (where neighbor is higher than center) get darkened
             const cavity = Math.max(0, avgNeighbor - center) * 5.0;
             const aoVal = Math.max(0, Math.min(255, Math.floor((1.0 - cavity) * 255)));
 
@@ -2335,10 +2659,8 @@ function render2DCanvasView() {
     const h = state.canvas.height;
     if (w * h === 0) return;
 
-    if (state.currentViewMap === 'diffuse') {
-        // Already drawn on main canvas
-        return;
-    }
+    if (state.currentViewMap === 'diffuse') return;
+
     let targetSource = state.canvas;
     if (state.currentViewMap === 'normal' && state.normalCanvas) targetSource = state.normalCanvas;
     else if (state.currentViewMap === 'height' && state.heightCanvas) targetSource = state.heightCanvas;
@@ -2348,7 +2670,7 @@ function render2DCanvasView() {
     ctx.drawImage(targetSource, 0, 0);
 }
 
-// --- 8. MULTI-THREADED WORKER SCHEDULER & PIPELINE ---
+// --- 8. MULTI-THREADED WORKER PIPELINE ---
 function generateTexture() {
     if (isRendering) {
         activeWorkers.forEach(w => w.terminate());
@@ -2379,11 +2701,11 @@ function generateTexture() {
     } catch (err) {
         loader.classList.remove('active');
         isRendering = false;
-        alert(`Render allocation aborted: GPU memory limit exceeded.`);
+        alert("Render allocation aborted: GPU memory limit exceeded.");
         return;
     }
 
-    // Custom Image Upload Pipeline
+    // Uploaded Image Pipeline
     if (state.uploadedImage) {
         ctx.drawImage(state.uploadedImage, 0, 0, w, h);
 
@@ -2391,7 +2713,6 @@ function generateTexture() {
             applySeamlessEdgeBlend(state.canvas);
         }
 
-        // Apply Post-Processing to uploaded image
         const imgData = ctx.getImageData(0, 0, w, h);
         const data = imgData.data;
         const contrast = parseFloat(document.getElementById('contrast').value);
@@ -2470,7 +2791,7 @@ function generateTexture() {
         try {
             worker = createWorker();
         } catch (workerErr) {
-            console.error("Worker spawn fallback:", workerErr);
+            console.error("Worker fallback:", workerErr);
             loader.classList.remove('active');
             isRendering = false;
             return;
@@ -2497,7 +2818,7 @@ function generateTexture() {
 
                 completedChunks++;
                 const percentage = Math.round((completedChunks / N) * 100);
-                loaderText.innerText = `Rendering Procedural Texture... ${percentage}%`;
+                loaderText.innerText = `Generating procedural chunks: ${percentage}%`;
                 progressBar.style.width = `${percentage}%`;
 
                 if (livePreview && threeView && threeView.isAvailable) {
@@ -2519,7 +2840,7 @@ function generateTexture() {
         };
 
         worker.onerror = function(err) {
-            console.error("Worker processing error:", err);
+            console.error("Worker error:", err);
             loader.classList.remove('active');
             isRendering = false;
             activeWorkers.forEach(w => w.terminate());
@@ -2537,7 +2858,7 @@ function generateTexture() {
     }
 }
 
-// --- 9. PRESETS, RANDOMIZERS & SERIALIZATION (JSON) ---
+// --- 9. PRESETS & SERIALIZATION ---
 const presets = {
     stone: {
         noiseType: 'value', scale: 120, octaves: 8, persistence: 0.55, lacunarity: 2.0,
@@ -2792,13 +3113,15 @@ function exportPresetJSON() {
         stops: state.gradientStops
     };
 
-    const jsonStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(config, null, 2));
-    const dlAnchor = document.createElement('a');
-    dlAnchor.setAttribute("href", jsonStr);
-    dlAnchor.setAttribute("download", `texture_preset_${config.noiseType}_${config.seed}.json`);
-    document.body.appendChild(dlAnchor);
-    dlAnchor.click();
-    dlAnchor.remove();
+    const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `texture_preset_${config.noiseType}_${config.seed}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1200);
 }
 
 function importPresetJSON(e) {
