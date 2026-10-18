@@ -677,9 +677,9 @@ function renderNoiseChunk(params) {
                     else n = noiseGen.value4d(ox, oy, oz, ow);
 
                     if (ridged) {
-                        n = 1.0 - Math.abs(n);
+                        n = Math.max(0.0, 1.0 - Math.abs(n) * 1.55);
                         n = n * n * ridgeWeight;
-                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.6));
                     }
                     noiseValue += n * amplitude;
                     maxValue += amplitude;
@@ -696,7 +696,7 @@ function renderNoiseChunk(params) {
                     freq *= lacunarity;
                 }
                 if (fbmMax > 0) fbm /= fbmMax;
-                let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 1.75));
+                let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 0.65));
                 if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                 noiseValue = n;
                 maxValue = 1;
@@ -704,9 +704,9 @@ function renderNoiseChunk(params) {
                 let amplitude = 1, freq = 1;
                 for (let o = 0; o < octaves; o++) {
                     const off = OCTAVE_OFFSETS_4D[o & 15];
-                    const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]));
-                    const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq + off[2], (tw + 3.7) * freq + off[3], (tx - 2.3) * freq + off[0], (ty - 2.3) * freq + off[1]));
-                    let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
+                    const n1 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]) * 1.65));
+                    const n2 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq + off[2], (tw + 3.7) * freq + off[3], (tx - 2.3) * freq + off[0], (ty - 2.3) * freq + off[1]) * 1.65));
+                    let n = Math.pow((n1 + n2) * 0.5, 3.6) * 2.0 - 1.0;
                     if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                     noiseValue += n * amplitude;
                     maxValue += amplitude;
@@ -759,7 +759,7 @@ function renderNoiseChunk(params) {
                     rx = nrx; ry = nry;
                 }
                 if (fbmMax > 0) fbm /= fbmMax;
-                let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
+                let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 0.65));
                 if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                 noiseValue = n;
                 maxValue = 1;
@@ -767,9 +767,9 @@ function renderNoiseChunk(params) {
                 let amplitude = 1;
                 let rx = baseSx, ry = baseSy;
                 for (let o = 0; o < octaves; o++) {
-                    const n1 = 1.0 - Math.abs(noiseGen.simplex2d(rx + o * 13.1, ry + o * 23.7));
-                    const n2 = 1.0 - Math.abs(noiseGen.simplex2d(ry + 17.3, rx - 11.7));
-                    let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
+                    const n1 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex2d(rx + o * 13.1, ry + o * 23.7) * 1.35));
+                    const n2 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex2d(ry + 17.3, rx - 11.7) * 1.35));
+                    let n = Math.pow((n1 + n2) * 0.5, 3.6) * 2.0 - 1.0;
                     if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                     noiseValue += n * amplitude;
                     maxValue += amplitude;
@@ -805,9 +805,9 @@ function renderNoiseChunk(params) {
                     else n = noiseGen.worley(sx, sy, worleyType, worleyDist);
 
                     if (ridged) {
-                        n = 1.0 - Math.abs(n);
+                        n = Math.max(0.0, 1.0 - Math.abs(n) * 1.55);
                         n = n * n * ridgeWeight;
-                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.6));
                     }
                     noiseValue += n * amplitude;
                     maxValue += amplitude;
@@ -820,7 +820,7 @@ function renderNoiseChunk(params) {
         }
 
         if (maxValue > 0) {
-            return ridged ? Math.min(1.0, (noiseValue / maxValue) * 1.25) : ((noiseValue / maxValue + 1.0) * 0.5);
+            return ridged ? Math.min(1.0, Math.max(0.0, (noiseValue / maxValue) * 1.08)) : ((noiseValue / maxValue + 1.0) * 0.5);
         }
         return 0.5;
     };

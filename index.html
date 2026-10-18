@@ -800,22 +800,34 @@
                     <label for="presetSelect">Material Preset</label>
                     <select id="presetSelect">
                         <option value="custom">Custom Configuration</option>
-                        <option value="stone">Granite Stone (5 Colors)</option>
-                        <option value="lava">Molten Lava (6 Colors)</option>
-                        <option value="wood">Wood Grain (5 Colors)</option>
-                        <option value="water">Ocean Water (5 Colors)</option>
-                        <option value="caustics">Underwater Caustics (5 Colors)</option>
+                        <option value="stone">Granite Stone (6 Colors)</option>
+                        <option value="lava">Molten Lava (7 Colors)</option>
+                        <option value="wood">Wood Grain (6 Colors)</option>
+                        <option value="water">Ocean Water (6 Colors)</option>
+                        <option value="caustics">Underwater Caustics (6 Colors)</option>
                         <option value="clouds">Sky Clouds (5 Colors)</option>
                         <option value="rust">Corroded Metal (6 Colors)</option>
                         <option value="cells">Alien Cells (6 Colors)</option>
                         <option value="ice">Cracked Ice (6 Colors)</option>
-                        <option value="cyberpunk">Cyberpunk Grid (5 Colors)</option>
+                        <option value="cyberpunk">Cyberpunk Grid (6 Colors)</option>
                         <option value="gold">Gold & Bronze (5 Colors)</option>
-                        <option value="marble">White Veined Marble (5 Colors)</option>
+                        <option value="marble">White Veined Marble (6 Colors)</option>
                         <option value="brickwall">Weathered Brick Wall (5 Colors)</option>
-                        <option value="sand">Desert Sand Dunes (5 Colors)</option>
-                        <option value="plasma">Electric Plasma (5 Colors)</option>
+                        <option value="sand">Desert Sand Dunes (6 Colors)</option>
+                        <option value="plasma">Electric Plasma (6 Colors)</option>
                         <option value="leather">Fine Leather (5 Colors)</option>
+                        <option value="moss">Forest Moss (6 Colors)</option>
+                        <option value="obsidian">Volcanic Obsidian (6 Colors)</option>
+                        <option value="copper">Aged Copper Patina (6 Colors)</option>
+                        <option value="malachite">Banded Malachite (8 Colors)</option>
+                        <option value="terracotta">Cracked Mud & Clay (6 Colors)</option>
+                        <option value="carbon">Carbon Fiber Weave (5 Colors)</option>
+                        <option value="camo">Woodland Camouflage (8 Colors)</option>
+                        <option value="damascus">Damascus Steel (6 Colors)</option>
+                        <option value="nebula">Deep Space Nebula (7 Colors)</option>
+                        <option value="scales">Dragon Scales (6 Colors)</option>
+                        <option value="concrete">Pitted Concrete (5 Colors)</option>
+                        <option value="amethyst">Crystalline Amethyst (6 Colors)</option>
                     </select>
 
                     <div class="preset-io-row">
@@ -1723,9 +1735,9 @@ function renderNoiseChunk(params) {
                     else if (noiseType === 'perlin') n = noiseGen.perlin4d(ox, oy, oz, ow);
                     else n = noiseGen.value4d(ox, oy, oz, ow);
                     if (ridged) {
-                        n = 1.0 - Math.abs(n);
+                        n = Math.max(0.0, 1.0 - Math.abs(n) * 1.55);
                         n = n * n * ridgeWeight;
-                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.6));
                     }
                     noiseValue += n * amplitude; maxValue += amplitude;
                     amplitude *= persistence; freq *= lacunarity;
@@ -1738,16 +1750,16 @@ function renderNoiseChunk(params) {
                     fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
                 }
                 if (fbmMax > 0) fbm /= fbmMax;
-                let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 1.75));
+                let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 0.65));
                 if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                 noiseValue = n; maxValue = 1;
             } else if (noiseType === 'caustics') {
                 let amplitude = 1, freq = 1;
                 for (let o = 0; o < octaves; o++) {
                     const off = OCTAVE_OFFSETS_4D[o & 15];
-                    const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]));
-                    const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq + off[2], (tw + 3.7) * freq + off[3], (tx - 2.3) * freq + off[0], (ty - 2.3) * freq + off[1]));
-                    let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
+                    const n1 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]) * 1.65));
+                    const n2 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq + off[2], (tw + 3.7) * freq + off[3], (tx - 2.3) * freq + off[0], (ty - 2.3) * freq + off[1]) * 1.65));
+                    let n = Math.pow((n1 + n2) * 0.5, 3.6) * 2.0 - 1.0;
                     if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                     noiseValue += n * amplitude; maxValue += amplitude;
                     amplitude *= persistence; freq *= lacunarity;
@@ -1789,16 +1801,16 @@ function renderNoiseChunk(params) {
                     rx = nrx; ry = nry;
                 }
                 if (fbmMax > 0) fbm /= fbmMax;
-                let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
+                let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 0.65));
                 if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                 noiseValue = n; maxValue = 1;
             } else if (noiseType === 'caustics') {
                 let amplitude = 1;
                 let rx = baseSx, ry = baseSy;
                 for (let o = 0; o < octaves; o++) {
-                    const n1 = 1.0 - Math.abs(noiseGen.simplex2d(rx + o * 13.1, ry + o * 23.7));
-                    const n2 = 1.0 - Math.abs(noiseGen.simplex2d(ry + 17.3, rx - 11.7));
-                    let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
+                    const n1 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex2d(rx + o * 13.1, ry + o * 23.7) * 1.35));
+                    const n2 = Math.max(0, 1.0 - Math.abs(noiseGen.simplex2d(ry + 17.3, rx - 11.7) * 1.35));
+                    let n = Math.pow((n1 + n2) * 0.5, 3.6) * 2.0 - 1.0;
                     if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                     noiseValue += n * amplitude; maxValue += amplitude;
                     amplitude *= persistence;
@@ -1829,9 +1841,9 @@ function renderNoiseChunk(params) {
                     else if (noiseType === 'value') n = noiseGen.value(sx, sy);
                     else n = noiseGen.worley(sx, sy, worleyType, worleyDist);
                     if (ridged) {
-                        n = 1.0 - Math.abs(n);
+                        n = Math.max(0.0, 1.0 - Math.abs(n) * 1.55);
                         n = n * n * ridgeWeight;
-                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.6));
                     }
                     noiseValue += n * amplitude; maxValue += amplitude;
                     amplitude *= persistence;
@@ -1843,7 +1855,7 @@ function renderNoiseChunk(params) {
         }
 
         if (maxValue > 0) {
-            return ridged ? Math.min(1.0, (noiseValue / maxValue) * 1.25) : ((noiseValue / maxValue + 1.0) * 0.5);
+            return ridged ? Math.min(1.0, Math.max(0.0, (noiseValue / maxValue) * 1.08)) : ((noiseValue / maxValue + 1.0) * 0.5);
         }
         return 0.5;
     };
@@ -4133,57 +4145,60 @@ function generateTexture() {
 // --- 9. PRESETS & SERIALIZATION ---
 const presets = {
     stone: {
-        noiseType: 'value', scale: 90, octaves: 8, persistence: 0.55, lacunarity: 2.0,
-        contrast: 1.3, brightness: 0.05,
-        matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.45, displacementScale: 0.06,
+        noiseType: 'value', scale: 14, octaves: 8, persistence: 0.7, lacunarity: 2.25,
+        turbStrength: 5, turbScale: 24,
+        contrast: 1.6, brightness: 0.0,
+        matRoughness: 0.88, matMetalness: 0.02, bumpScale: 0.55, displacementScale: 0.06,
         stops: [
-            { pos: 0.0, color: "#181818" }, { pos: 0.25, color: "#424242" },
-            { pos: 0.55, color: "#7a7a7a" }, { pos: 0.8, color: "#ababab" },
-            { pos: 1.0, color: "#dedede" }
+            { pos: 0.0, color: "#121314" }, { pos: 0.25, color: "#36393d" },
+            { pos: 0.52, color: "#6b6f75" }, { pos: 0.78, color: "#a5a9ad" },
+            { pos: 0.92, color: "#d2d5d9" }, { pos: 1.0, color: "#f0f2f5" }
         ]
     },
     lava: {
-        noiseType: 'perlin', scale: 60, octaves: 5, persistence: 0.6, lacunarity: 2.0,
-        ridged: true, turbStrength: 30, turbScale: 60,
-        contrast: 1.8, brightness: 0.05, invert: false,
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 52, octaves: 4, persistence: 0.52, lacunarity: 2.05,
+        turbStrength: 24, turbScale: 55,
+        contrast: 1.75, brightness: -0.04, invert: true,
         bumpScale: 0.8, matRoughness: 0.35, matMetalness: 0.1, displacementScale: 0.08,
         stops: [
-            { pos: 0.0, color: "#1a0500" }, { pos: 0.2, color: "#540800" },
-            { pos: 0.45, color: "#a31800" }, { pos: 0.7, color: "#ff4d00" },
-            { pos: 0.88, color: "#ffaa00" }, { pos: 1.0, color: "#fff3a8" }
+            { pos: 0.0, color: "#0d0504" }, { pos: 0.38, color: "#1f0b07" },
+            { pos: 0.58, color: "#421106" }, { pos: 0.72, color: "#a81c00" },
+            { pos: 0.84, color: "#ff4d00" }, { pos: 0.93, color: "#ffae00" },
+            { pos: 1.0, color: "#fff7b8" }
         ]
     },
     wood: {
-        noiseType: 'waves', scale: 45, octaves: 4, persistence: 0.5, lacunarity: 2.0,
-        turbStrength: 18, turbScale: 90,
-        contrast: 1.35, brightness: 0.02,
+        noiseType: 'waves', scale: 42, octaves: 6, persistence: 0.54, lacunarity: 2.1,
+        ridged: true, turbStrength: 16, turbScale: 95,
+        contrast: 1.2, brightness: 0.0, invert: true,
         matRoughness: 0.72, matMetalness: 0.0, bumpScale: 0.25, displacementScale: 0.03,
         stops: [
-            { pos: 0.0, color: "#3d1e08" }, { pos: 0.25, color: "#5c3317" },
-            { pos: 0.55, color: "#8b5e3c" }, { pos: 0.8, color: "#b58759" },
-            { pos: 1.0, color: "#dbc19c" }
+            { pos: 0.0, color: "#2b1104" }, { pos: 0.16, color: "#4f230b" },
+            { pos: 0.35, color: "#783c16" }, { pos: 0.58, color: "#9c5525" },
+            { pos: 0.8, color: "#b86f39" }, { pos: 1.0, color: "#cf8950" }
         ]
     },
     water: {
-        noiseType: 'simplex', scale: 80, octaves: 5, persistence: 0.45, lacunarity: 2.0,
-        ridged: true, turbStrength: 45, turbScale: 70,
-        contrast: 1.3, brightness: 0.1, invert: false,
+        noiseType: 'simplex', scale: 62, octaves: 5, persistence: 0.48, lacunarity: 2.0,
+        ridged: true, turbStrength: 24, turbScale: 70,
+        contrast: 1.15, brightness: -0.06, invert: false,
         bumpScale: 0.25, matRoughness: 0.08, matMetalness: 0.3, displacementScale: 0.04,
         stops: [
-            { pos: 0.0, color: "#001b33" }, { pos: 0.25, color: "#004b7a" },
-            { pos: 0.55, color: "#0088cc" }, { pos: 0.82, color: "#48cae4" },
-            { pos: 1.0, color: "#caf0f8" }
+            { pos: 0.0, color: "#02182b" }, { pos: 0.3, color: "#053961" },
+            { pos: 0.6, color: "#0a6999" }, { pos: 0.82, color: "#1fa3c9" },
+            { pos: 0.94, color: "#75e2f5" }, { pos: 1.0, color: "#e6fbff" }
         ]
     },
     caustics: {
-        noiseType: 'caustics', scale: 65, octaves: 3, persistence: 0.5, lacunarity: 2.0,
-        turbStrength: 20, turbScale: 70,
-        contrast: 1.5, brightness: 0.05, invert: false,
+        noiseType: 'caustics', scale: 60, octaves: 3, persistence: 0.48, lacunarity: 2.0,
+        turbStrength: 16, turbScale: 75,
+        contrast: 1.55, brightness: -0.04, invert: false,
         bumpScale: 0.3, matRoughness: 0.1, matMetalness: 0.2, displacementScale: 0.04,
         stops: [
-            { pos: 0.0, color: "#001529" }, { pos: 0.3, color: "#004675" },
-            { pos: 0.6, color: "#0096c7" }, { pos: 0.85, color: "#72efdd" },
-            { pos: 1.0, color: "#ffffff" }
+            { pos: 0.0, color: "#021629" }, { pos: 0.35, color: "#053c63" },
+            { pos: 0.62, color: "#0a74a6" }, { pos: 0.82, color: "#2ccce8" },
+            { pos: 0.93, color: "#8cf5ff" }, { pos: 1.0, color: "#ffffff" }
         ]
     },
     clouds: {
@@ -4219,24 +4234,26 @@ const presets = {
         ]
     },
     ice: {
-        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan',
-        scale: 65, octaves: 2, persistence: 0.45, lacunarity: 2.0,
-        contrast: 1.9, brightness: 0.15, invert: false,
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 55, octaves: 4, persistence: 0.52, lacunarity: 2.1,
+        turbStrength: 14, turbScale: 50,
+        contrast: 1.5, brightness: -0.1, invert: true,
         bumpScale: 0.35, matRoughness: 0.08, matMetalness: 0.15, displacementScale: 0.04,
         stops: [
-            { pos: 0.0, color: "#051a30" }, { pos: 0.22, color: "#104f7a" },
-            { pos: 0.5, color: "#2d8bc9" }, { pos: 0.75, color: "#80c7f2" },
-            { pos: 0.9, color: "#cbe8fa" }, { pos: 1.0, color: "#ffffff" }
+            { pos: 0.0, color: "#051b33" }, { pos: 0.35, color: "#0d3b66" },
+            { pos: 0.65, color: "#1c6399" }, { pos: 0.82, color: "#4da3d9" },
+            { pos: 0.93, color: "#b8e6ff" }, { pos: 1.0, color: "#ffffff" }
         ]
     },
     cyberpunk: {
-        noiseType: 'perlin', scale: 50, octaves: 4, persistence: 0.5, lacunarity: 2.0,
-        turbStrength: 45, turbScale: 50, contrast: 1.8, brightness: 0.0,
+        noiseType: 'brick', scale: 36, octaves: 3, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 0, turbScale: 50,
+        contrast: 1.35, brightness: -0.06, invert: true,
         matRoughness: 0.2, matMetalness: 0.85, bumpScale: 0.6, displacementScale: 0.06,
         stops: [
-            { pos: 0.0, color: "#080012" }, { pos: 0.3, color: "#450069" },
-            { pos: 0.6, color: "#c7006a" }, { pos: 0.85, color: "#00f0ff" },
-            { pos: 1.0, color: "#ffffff" }
+            { pos: 0.0, color: "#06020f" }, { pos: 0.38, color: "#120629" },
+            { pos: 0.62, color: "#2e0954" }, { pos: 0.78, color: "#ff007f" },
+            { pos: 0.92, color: "#00f0ff" }, { pos: 1.0, color: "#e8ffff" }
         ]
     },
     gold: {
@@ -4250,13 +4267,14 @@ const presets = {
         ]
     },
     marble: {
-        noiseType: 'waves', scale: 75, octaves: 6, persistence: 0.55, lacunarity: 2.1,
-        turbStrength: 45, turbScale: 75, contrast: 1.5, brightness: 0.12,
+        noiseType: 'waves', scale: 72, octaves: 6, persistence: 0.58, lacunarity: 2.1,
+        ridged: true, turbStrength: 34, turbScale: 70,
+        contrast: 1.35, brightness: -0.02, invert: true,
         matRoughness: 0.15, matMetalness: 0.05, bumpScale: 0.2, displacementScale: 0.02,
         stops: [
-            { pos: 0.0, color: "#141414" }, { pos: 0.18, color: "#424242" },
-            { pos: 0.45, color: "#909090" }, { pos: 0.78, color: "#e6e6e6" },
-            { pos: 1.0, color: "#ffffff" }
+            { pos: 0.0, color: "#222429" }, { pos: 0.12, color: "#585c66" },
+            { pos: 0.25, color: "#9ea2ab" }, { pos: 0.42, color: "#e0e1e6" },
+            { pos: 0.7, color: "#f4f4f6" }, { pos: 1.0, color: "#ffffff" }
         ]
     },
     brickwall: {
@@ -4270,34 +4288,177 @@ const presets = {
         ]
     },
     sand: {
-        noiseType: 'simplex', scale: 45, octaves: 4, persistence: 0.5, lacunarity: 2.0,
-        turbStrength: 20, turbScale: 100, contrast: 1.3, brightness: 0.0,
+        noiseType: 'waves', scale: 40, octaves: 4, persistence: 0.35, lacunarity: 2.0,
+        ridged: true, turbStrength: 12, turbScale: 90,
+        contrast: 1.15, brightness: 0.02, invert: true,
         matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.4, displacementScale: 0.05,
         stops: [
-            { pos: 0.0, color: "#472b0c" }, { pos: 0.25, color: "#7a4c19" },
-            { pos: 0.55, color: "#ba8443" }, { pos: 0.8, color: "#e3b878" },
-            { pos: 1.0, color: "#faecc8" }
+            { pos: 0.0, color: "#7a4d1d" }, { pos: 0.16, color: "#a16b2f" },
+            { pos: 0.36, color: "#c48b48" }, { pos: 0.62, color: "#dea966" },
+            { pos: 0.85, color: "#f0c486" }, { pos: 1.0, color: "#fae0b0" }
         ]
     },
     plasma: {
-        noiseType: 'simplex', scale: 55, octaves: 6, persistence: 0.65, lacunarity: 2.3,
-        ridged: true, turbStrength: 60, turbScale: 50, contrast: 2.0, brightness: 0.1,
+        noiseType: 'simplex', scale: 58, octaves: 5, persistence: 0.58, lacunarity: 2.1,
+        ridged: true, turbStrength: 45, turbScale: 60,
+        contrast: 1.48, brightness: -0.1,
         matRoughness: 0.1, matMetalness: 0.7, bumpScale: 0.5, displacementScale: 0.07,
         stops: [
-            { pos: 0.0, color: "#050014" }, { pos: 0.25, color: "#2a0066" },
-            { pos: 0.5, color: "#8800ff" }, { pos: 0.75, color: "#00d4ff" },
-            { pos: 1.0, color: "#ffffff" }
+            { pos: 0.0, color: "#050012" }, { pos: 0.32, color: "#1c0045" },
+            { pos: 0.58, color: "#6a00cc" }, { pos: 0.78, color: "#d400ff" },
+            { pos: 0.91, color: "#00e5ff" }, { pos: 1.0, color: "#ffffff" }
         ]
     },
     leather: {
-        noiseType: 'worley', worleyType: 'f1', worleyDist: 'euclidean',
-        scale: 22, octaves: 3, persistence: 0.4, lacunarity: 2.0,
-        contrast: 1.3, brightness: -0.05,
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 18, octaves: 3, persistence: 0.42, lacunarity: 2.0,
+        turbStrength: 4, turbScale: 32,
+        contrast: 1.35, brightness: 0.02, invert: false,
         matRoughness: 0.65, matMetalness: 0.05, bumpScale: 0.5, displacementScale: 0.04,
         stops: [
-            { pos: 0.0, color: "#1c0d02" }, { pos: 0.25, color: "#3d1e08" },
-            { pos: 0.55, color: "#663510" }, { pos: 0.8, color: "#8f5120" },
-            { pos: 1.0, color: "#b3743b" }
+            { pos: 0.0, color: "#1c0c04" }, { pos: 0.18, color: "#3b1c0b" },
+            { pos: 0.42, color: "#5e2f14" }, { pos: 0.72, color: "#7a401e" },
+            { pos: 1.0, color: "#945129" }
+        ]
+    },
+    moss: {
+        noiseType: 'simplex', scale: 32, octaves: 7, persistence: 0.65, lacunarity: 2.15,
+        turbStrength: 16, turbScale: 45,
+        contrast: 1.4, brightness: -0.02,
+        matRoughness: 0.92, matMetalness: 0.0, bumpScale: 0.65, displacementScale: 0.07,
+        stops: [
+            { pos: 0.0, color: "#0d1709" }, { pos: 0.25, color: "#1e3614" },
+            { pos: 0.52, color: "#396120" }, { pos: 0.78, color: "#608f32" },
+            { pos: 0.93, color: "#8ab846" }, { pos: 1.0, color: "#b4d966" }
+        ]
+    },
+    obsidian: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 60, octaves: 4, persistence: 0.48, lacunarity: 2.1,
+        ridged: true, turbStrength: 22, turbScale: 65,
+        contrast: 1.7, brightness: -0.1,
+        matRoughness: 0.08, matMetalness: 0.25, bumpScale: 0.45, displacementScale: 0.05,
+        stops: [
+            { pos: 0.0, color: "#050508" }, { pos: 0.35, color: "#0d0c14" },
+            { pos: 0.65, color: "#1c192b" }, { pos: 0.85, color: "#3a3252" },
+            { pos: 0.95, color: "#6c5e8c" }, { pos: 1.0, color: "#b5a8d4" }
+        ]
+    },
+    copper: {
+        noiseType: 'perlin', scale: 48, octaves: 6, persistence: 0.62, lacunarity: 2.1,
+        turbStrength: 22, turbScale: 55,
+        contrast: 1.45, brightness: 0.0,
+        matRoughness: 0.55, matMetalness: 0.72, bumpScale: 0.45, displacementScale: 0.05,
+        stops: [
+            { pos: 0.0, color: "#2b160c" }, { pos: 0.28, color: "#6e381f" },
+            { pos: 0.48, color: "#b36236" }, { pos: 0.62, color: "#3b7a6b" },
+            { pos: 0.82, color: "#4da890" }, { pos: 1.0, color: "#8ce0c7" }
+        ]
+    },
+    malachite: {
+        noiseType: 'waves', scale: 52, octaves: 4, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 48, turbScale: 58,
+        contrast: 1.15, brightness: 0.0,
+        matRoughness: 0.22, matMetalness: 0.15, bumpScale: 0.25, displacementScale: 0.03,
+        stops: [
+            { pos: 0.0, color: "#031a10" }, { pos: 0.16, color: "#0c4a2e" },
+            { pos: 0.32, color: "#1b8c58" }, { pos: 0.46, color: "#45d18f" },
+            { pos: 0.58, color: "#07301e" }, { pos: 0.74, color: "#187a4d" },
+            { pos: 0.88, color: "#3ec987" }, { pos: 1.0, color: "#8ff2be" }
+        ]
+    },
+    terracotta: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 48, octaves: 4, persistence: 0.5, lacunarity: 2.15,
+        turbStrength: 12, turbScale: 45,
+        contrast: 1.75, brightness: 0.06,
+        matRoughness: 0.92, matMetalness: 0.0, bumpScale: 0.7, displacementScale: 0.07,
+        stops: [
+            { pos: 0.0, color: "#1f1109" }, { pos: 0.14, color: "#472716" },
+            { pos: 0.3, color: "#7d4527" }, { pos: 0.6, color: "#a8613b" },
+            { pos: 0.85, color: "#c47952" }, { pos: 1.0, color: "#d9936c" }
+        ]
+    },
+    carbon: {
+        noiseType: 'brick', scale: 16, octaves: 2, persistence: 0.35, lacunarity: 2.0,
+        turbStrength: 0, turbScale: 50,
+        contrast: 1.4, brightness: -0.05,
+        matRoughness: 0.28, matMetalness: 0.65, bumpScale: 0.35, displacementScale: 0.02,
+        stops: [
+            { pos: 0.0, color: "#08090a" }, { pos: 0.25, color: "#141619" },
+            { pos: 0.55, color: "#262a30" }, { pos: 0.82, color: "#3d434d" },
+            { pos: 1.0, color: "#5c6470" }
+        ]
+    },
+    camo: {
+        noiseType: 'worley', worleyType: 'f1', worleyDist: 'euclidean',
+        scale: 55, octaves: 3, persistence: 0.45, lacunarity: 2.0,
+        turbStrength: 38, turbScale: 50,
+        contrast: 2.4, brightness: 0.0,
+        matRoughness: 0.85, matMetalness: 0.0, bumpScale: 0.2, displacementScale: 0.02,
+        stops: [
+            { pos: 0.0, color: "#1c2118" }, { pos: 0.24, color: "#1c2118" },
+            { pos: 0.26, color: "#374f2f" }, { pos: 0.52, color: "#374f2f" },
+            { pos: 0.54, color: "#5c4833" }, { pos: 0.76, color: "#5c4833" },
+            { pos: 0.78, color: "#9c8b67" }, { pos: 1.0, color: "#9c8b67" }
+        ]
+    },
+    damascus: {
+        noiseType: 'waves', scale: 34, octaves: 5, persistence: 0.55, lacunarity: 2.0,
+        turbStrength: 42, turbScale: 65,
+        contrast: 1.6, brightness: 0.0,
+        matRoughness: 0.22, matMetalness: 0.92, bumpScale: 0.3, displacementScale: 0.03,
+        stops: [
+            { pos: 0.0, color: "#14171c" }, { pos: 0.22, color: "#2d333d" },
+            { pos: 0.45, color: "#5c6573" }, { pos: 0.65, color: "#232830" },
+            { pos: 0.82, color: "#96a0ad" }, { pos: 1.0, color: "#dce3eb" }
+        ]
+    },
+    nebula: {
+        noiseType: 'simplex', scale: 68, octaves: 6, persistence: 0.62, lacunarity: 2.1,
+        turbStrength: 38, turbScale: 65,
+        contrast: 1.65, brightness: 0.08,
+        matRoughness: 0.9, matMetalness: 0.1, bumpScale: 0.15, displacementScale: 0.02,
+        stops: [
+            { pos: 0.0, color: "#03010a" }, { pos: 0.22, color: "#12052e" },
+            { pos: 0.44, color: "#4f0b59" }, { pos: 0.64, color: "#b51963" },
+            { pos: 0.8, color: "#ff6b4a" }, { pos: 0.92, color: "#6ef2ff" },
+            { pos: 1.0, color: "#ffffff" }
+        ]
+    },
+    scales: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan',
+        scale: 30, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 4, turbScale: 55,
+        contrast: 1.95, brightness: 0.08, invert: false,
+        matRoughness: 0.32, matMetalness: 0.55, bumpScale: 0.7, displacementScale: 0.06,
+        stops: [
+            { pos: 0.0, color: "#05120b" }, { pos: 0.18, color: "#0d2e1b" },
+            { pos: 0.42, color: "#1b5934" }, { pos: 0.68, color: "#328f52" },
+            { pos: 0.88, color: "#78c252" }, { pos: 1.0, color: "#d9ed7e" }
+        ]
+    },
+    concrete: {
+        noiseType: 'value', scale: 16, octaves: 8, persistence: 0.68, lacunarity: 2.2,
+        turbStrength: 6, turbScale: 32,
+        contrast: 1.35, brightness: 0.02,
+        matRoughness: 0.92, matMetalness: 0.0, bumpScale: 0.45, displacementScale: 0.04,
+        stops: [
+            { pos: 0.0, color: "#3b3e42" }, { pos: 0.28, color: "#5e6268" },
+            { pos: 0.55, color: "#82878f" }, { pos: 0.8, color: "#a3a8b0" },
+            { pos: 1.0, color: "#c4c9cf" }
+        ]
+    },
+    amethyst: {
+        noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
+        scale: 38, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        ridged: false, turbStrength: 7, turbScale: 48,
+        contrast: 2.0, brightness: 0.08, invert: false,
+        matRoughness: 0.12, matMetalness: 0.25, bumpScale: 0.55, displacementScale: 0.06,
+        stops: [
+            { pos: 0.0, color: "#11031f" }, { pos: 0.22, color: "#2b094d" },
+            { pos: 0.48, color: "#591596" }, { pos: 0.74, color: "#993fd9" },
+            { pos: 0.9, color: "#d494ff" }, { pos: 1.0, color: "#faedff" }
         ]
     }
 };
