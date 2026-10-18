@@ -963,6 +963,8 @@ function encodePngStripIdat(params) {
         const fy = gy * scaleY - srcStartY;
         const sy0 = Math.max(0, Math.min(maxSrcY, fy | 0));
         const sy1 = Math.max(0, Math.min(maxSrcY, sy0 + 1));
+        const wy = Math.max(0, Math.min(256, ((fy - sy0) * 256) | 0));
+        const invWy = 256 - wy;
         const row0 = sy0 * srcW * 4;
         const row1 = sy1 * srcW * 4;
 
@@ -986,15 +988,22 @@ function encodePngStripIdat(params) {
                 g = srcRgba[i00 + 1];
                 b = srcRgba[i00 + 2];
             } else {
-                const sx0 = (x * scaleX) | 0;
-                const sx1 = (sx0 + (x & 1)) < srcW ? (sx0 + (x & 1)) : 0;
+                const fx = x * scaleX;
+                const sx0 = fx | 0;
+                const sx1 = (sx0 + 1) < srcW ? (sx0 + 1) : 0;
+                const wx = ((fx - sx0) * 256) | 0;
+                const invWx = 256 - wx;
+                const w00 = invWx * invWy;
+                const w10 = wx * invWy;
+                const w01 = invWx * wy;
+                const w11 = wx * wy;
                 const i00 = row0 + sx0 * 4, i10 = row0 + sx1 * 4;
                 const i01 = row1 + sx0 * 4, i11 = row1 + sx1 * 4;
                 const hsh = ((((x + seedInt) * 374761393) ^ ((gy + seedInt) * 668265263)) >>> 28) - 8;
                 const m = hsh >> 2;
-                r = ((srcRgba[i00] + srcRgba[i10] + srcRgba[i01] + srcRgba[i11]) >> 2) + m;
-                g = ((srcRgba[i00 + 1] + srcRgba[i10 + 1] + srcRgba[i01 + 1] + srcRgba[i11 + 1]) >> 2) + m;
-                b = ((srcRgba[i00 + 2] + srcRgba[i10 + 2] + srcRgba[i01 + 2] + srcRgba[i11 + 2]) >> 2) + m;
+                r = ((srcRgba[i00] * w00 + srcRgba[i10] * w10 + srcRgba[i01] * w01 + srcRgba[i11] * w11) >>> 16) + m;
+                g = ((srcRgba[i00 + 1] * w00 + srcRgba[i10 + 1] * w10 + srcRgba[i01 + 1] * w01 + srcRgba[i11 + 1] * w11) >>> 16) + m;
+                b = ((srcRgba[i00 + 2] * w00 + srcRgba[i10 + 2] * w10 + srcRgba[i01 + 2] * w01 + srcRgba[i11 + 2] * w11) >>> 16) + m;
                 if (r < 0) r = 0; else if (r > 255) r = 255;
                 if (g < 0) g = 0; else if (g > 255) g = 255;
                 if (b < 0) b = 0; else if (b > 255) b = 255;
