@@ -583,7 +583,7 @@ function renderNoiseChunk(params) {
     const vHeight = Math.max(height, numOrDefault(params.virtualHeight, height));
     const scaleX = vWidth / width;
     const scaleY = vHeight / height;
-    const useRGSS = scaleX > 1.001 || scaleY > 1.001;
+    const useRGSS = (scaleX > 1.001 || scaleY > 1.001) && (width * height <= 4096 * 4096);
 
     const seed = parseNumericSeed(params.seed);
     const scale = Math.max(1, numOrDefault(params.scale, 50));
@@ -607,34 +607,29 @@ function renderNoiseChunk(params) {
     const heightData = new Float32Array(width * chunkHeight);
 
     const twoPi = 2 * Math.PI;
-    // Resolution-invariant canonical domain: preserves exact framing from 256px Fast Preview up to 32K
-    const minDim = Math.max(1, Math.min(vWidth, vHeight));
-    const domainW = 256.0 * (vWidth / minDim);
-    const domainH = 256.0 * (vHeight / minDim);
-
-    // Scale-consistent toroidal radii: arc length 2*pi*R matches domainW/scale & domainH/scale
-    const cyclesX = Math.max(0.25, domainW / scale);
-    const cyclesY = Math.max(0.25, domainH / scale);
+    // Scale-consistent toroidal radii: arc length 2*pi*R matches vWidth/scale & vHeight/scale
+    const cyclesX = Math.max(0.25, vWidth / scale);
+    const cyclesY = Math.max(0.25, vHeight / scale);
     const Rx = cyclesX / twoPi;
     const Ry = cyclesY / twoPi;
 
-    const turbCyclesX = Math.max(0.25, domainW / turbScale);
-    const turbCyclesY = Math.max(0.25, domainH / turbScale);
+    const turbCyclesX = Math.max(0.25, vWidth / turbScale);
+    const turbCyclesY = Math.max(0.25, vHeight / turbScale);
     const turbRx = turbCyclesX / twoPi;
     const turbRy = turbCyclesY / twoPi;
 
-    const brickCols = Math.max(2, Math.round(domainW / scale));
-    const brickRows = Math.max(4, Math.round((domainH / scale) * 2));
-    const worleyPeriodX = Math.max(1, Math.round(domainW / scale));
-    const worleyPeriodY = Math.max(1, Math.round(domainH / scale));
+    const brickCols = Math.max(2, Math.round(vWidth / scale));
+    const brickRows = Math.max(4, Math.round((vHeight / scale) * 2));
+    const worleyPeriodX = Math.max(1, Math.round(vWidth / scale));
+    const worleyPeriodY = Math.max(1, Math.round(vHeight / scale));
     const waveCyclesX = Math.max(1, Math.round(cyclesX));
     const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
 
     const evaluatePoint = (vx, vy) => {
         let u = vx / vWidth;
         let v = vy / vHeight;
-        let nx = u * domainW;
-        let ny = v * domainH;
+        let nx = vx;
+        let ny = vy;
 
         // Turbulence / Domain Warping
         if (turbStrength > 0) {
@@ -648,13 +643,13 @@ function renderNoiseChunk(params) {
                 wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
                 wy = turbGen.simplex4d(tnx + 13.7, tny + 29.3, tnz + 41.1, tnw + 53.9);
             } else {
-                wx = turbGen.simplex2d(nx / turbScale, ny / turbScale);
-                wy = turbGen.simplex2d((nx + 521.3) / turbScale, (ny + 863.7) / turbScale);
+                wx = turbGen.simplex2d(vx / turbScale, vy / turbScale);
+                wy = turbGen.simplex2d((vx + 521.3) / turbScale, (vy + 863.7) / turbScale);
             }
             nx += wx * turbStrength;
             ny += wy * turbStrength;
-            u = nx / domainW;
-            v = ny / domainH;
+            u = nx / vWidth;
+            v = ny / vHeight;
         }
 
         let noiseValue = 0;
@@ -835,7 +830,7 @@ function renderNoiseChunk(params) {
         for (let x = 0; x < width; x++) {
             let noiseValue;
             if (!useRGSS) {
-                noiseValue = evaluatePoint(x, y);
+                noiseValue = evaluatePoint(x * scaleX, y * scaleY);
             } else {
                 // 4x Rotated Grid Super-Sampling (RGSS) across 16K / 32K virtual texel footprint
                 const s0 = evaluatePoint((x + 0.125) * scaleX, (y + 0.375) * scaleY);
@@ -877,10 +872,183 @@ function renderNoiseChunk(params) {
     };
 }
 
-// 5. WORKER MESSAGE HANDLER
+// 5. PARALLEL RFC 1951 TYPE-2 HUFFMAN PNG IDAT STRIP ENCODER (FOR 16K / 32K TRUE-RES EXPORT)
+const PNG_CRC_TABLE = new Uint32Array(256);
+for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    PNG_CRC_TABLE[n] = c >>> 0;
+}
+
+function pngCrc32(buf, start, end) {
+    let c = 0xffffffff;
+    for (let i = start; i < end; i++) c = PNG_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+}
+
+const HUFF_LIT_LENS = new Uint8Array(257);
+const HUFF_LIT_CODES = new Uint16Array(257);
+const HUFF_CL_LENS = new Uint8Array(19);
+const HUFF_CL_CODES = new Uint16Array(19);
+const HUFF_CL_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+(function initCanonicalHuffman() {
+    const symOrder = [0];
+    for (let d = 1; d <= 127; d++) symOrder.push(d, 256 - d);
+    symOrder.push(128, 256);
+    const buckets = [[1, 2], [2, 3], [2, 4], [4, 5], [6, 6], [12, 7], [26, 11], [204, 12]];
+    let idx = 0;
+    for (let b = 0; b < buckets.length; b++) {
+        const count = buckets[b][0], len = buckets[b][1];
+        for (let i = 0; i < count; i++) HUFF_LIT_LENS[symOrder[idx++]] = len;
+    }
+    function buildCodes(lens, outCodes, maxLen) {
+        const blCount = new Uint16Array(maxLen + 1);
+        for (let i = 0; i < lens.length; i++) if (lens[i]) blCount[lens[i]]++;
+        const nextCode = new Uint16Array(maxLen + 1);
+        let code = 0;
+        for (let bits = 1; bits <= maxLen; bits++) {
+            code = (code + blCount[bits - 1]) << 1;
+            nextCode[bits] = code;
+        }
+        for (let n = 0; n < lens.length; n++) {
+            const len = lens[n];
+            if (len) {
+                let c = nextCode[len]++, rev = 0;
+                for (let b = 0; b < len; b++) { rev = (rev << 1) | (c & 1); c >>= 1; }
+                outCodes[n] = rev;
+            }
+        }
+    }
+    buildCodes(HUFF_LIT_LENS, HUFF_LIT_CODES, 12);
+    const activeCl = [2, 3, 4, 5, 6, 7, 11, 12];
+    for (let i = 0; i < activeCl.length; i++) HUFF_CL_LENS[activeCl[i]] = 3;
+    buildCodes(HUFF_CL_LENS, HUFF_CL_CODES, 3);
+})();
+
+function encodePngStripIdat(params) {
+    const { stripIndex, srcRgba, srcW, srcH, srcStartY, srcRows, targetW, targetH, startY, stripH, seed } = params;
+    const maxBytes = Math.ceil(stripH * (1 + targetW * 3) * 1.55) + 1024;
+    const buf = new Uint8Array(12 + maxBytes);
+    buf[4] = 73; buf[5] = 68; buf[6] = 65; buf[7] = 84; // 'IDAT'
+    let outPos = 8, bitBuf = 0, bitCnt = 0;
+    const writeBits = (val, len) => {
+        bitBuf |= (val << bitCnt);
+        bitCnt += len;
+        while (bitCnt >= 8) {
+            buf[outPos++] = bitBuf & 255;
+            bitBuf >>>= 8;
+            bitCnt -= 8;
+        }
+    };
+
+    writeBits(0, 1);
+    writeBits(2, 2);
+    writeBits(0, 5);
+    writeBits(7, 5);
+    writeBits(15, 4);
+    for (let i = 0; i < 19; i++) writeBits(HUFF_CL_LENS[HUFF_CL_ORDER[i]], 3);
+    for (let i = 0; i < 257; i++) writeBits(HUFF_CL_CODES[HUFF_LIT_LENS[i]], 3);
+    for (let i = 0; i < 8; i++) writeBits(HUFF_CL_CODES[3], 3);
+
+    let s1 = 1, s2 = 0;
+    const maxSrcY = Math.max(0, srcRows - 1);
+    const isExact1to1 = (srcW === targetW && srcH === targetH);
+    const scaleX = srcW / targetW;
+    const scaleY = srcH / targetH;
+    const seedInt = parseNumericSeed(seed);
+
+    for (let y = 0; y < stripH; y++) {
+        const gy = startY + y;
+        const fy = gy * scaleY - srcStartY;
+        const sy0 = Math.max(0, Math.min(maxSrcY, fy | 0));
+        const sy1 = Math.max(0, Math.min(maxSrcY, sy0 + 1));
+        const row0 = sy0 * srcW * 4;
+        const row1 = sy1 * srcW * 4;
+
+        s1 += 1; if (s1 >= 65521) s1 -= 65521;
+        s2 += s1; if (s2 >= 65521) s2 -= 65521;
+        bitBuf |= (HUFF_LIT_CODES[1] << bitCnt);
+        bitCnt += HUFF_LIT_LENS[1];
+        if (bitCnt >= 16) {
+            buf[outPos++] = bitBuf & 255;
+            buf[outPos++] = (bitBuf >>> 8) & 255;
+            bitBuf >>>= 16;
+            bitCnt -= 16;
+        }
+
+        let pr = 0, pg = 0, pb = 0;
+        for (let x = 0; x < targetW; x++) {
+            let r, g, b;
+            if (isExact1to1) {
+                const i00 = row0 + x * 4;
+                r = srcRgba[i00];
+                g = srcRgba[i00 + 1];
+                b = srcRgba[i00 + 2];
+            } else {
+                const sx0 = (x * scaleX) | 0;
+                const sx1 = (sx0 + (x & 1)) < srcW ? (sx0 + (x & 1)) : 0;
+                const i00 = row0 + sx0 * 4, i10 = row0 + sx1 * 4;
+                const i01 = row1 + sx0 * 4, i11 = row1 + sx1 * 4;
+                const hsh = ((((x + seedInt) * 374761393) ^ ((gy + seedInt) * 668265263)) >>> 28) - 8;
+                const m = hsh >> 2;
+                r = ((srcRgba[i00] + srcRgba[i10] + srcRgba[i01] + srcRgba[i11]) >> 2) + m;
+                g = ((srcRgba[i00 + 1] + srcRgba[i10 + 1] + srcRgba[i01 + 1] + srcRgba[i11 + 1]) >> 2) + m;
+                b = ((srcRgba[i00 + 2] + srcRgba[i10 + 2] + srcRgba[i01 + 2] + srcRgba[i11 + 2]) >> 2) + m;
+                if (r < 0) r = 0; else if (r > 255) r = 255;
+                if (g < 0) g = 0; else if (g > 255) g = 255;
+                if (b < 0) b = 0; else if (b > 255) b = 255;
+            }
+
+            const dr = (r - pr) & 255;
+            const dg = (g - pg) & 255;
+            const db = (b - pb) & 255;
+            pr = r; pg = g; pb = b;
+
+            s1 += dr; s2 += s1;
+            s1 += dg; s2 += s1;
+            s1 += db; s2 += s1;
+            if ((x & 511) === 511) { s1 %= 65521; s2 %= 65521; }
+
+            bitBuf |= (HUFF_LIT_CODES[dr] << bitCnt); bitCnt += HUFF_LIT_LENS[dr];
+            if (bitCnt >= 16) { buf[outPos++] = bitBuf & 255; buf[outPos++] = (bitBuf >>> 8) & 255; bitBuf >>>= 16; bitCnt -= 16; }
+            bitBuf |= (HUFF_LIT_CODES[dg] << bitCnt); bitCnt += HUFF_LIT_LENS[dg];
+            if (bitCnt >= 16) { buf[outPos++] = bitBuf & 255; buf[outPos++] = (bitBuf >>> 8) & 255; bitBuf >>>= 16; bitCnt -= 16; }
+            bitBuf |= (HUFF_LIT_CODES[db] << bitCnt); bitCnt += HUFF_LIT_LENS[db];
+            if (bitCnt >= 16) { buf[outPos++] = bitBuf & 255; buf[outPos++] = (bitBuf >>> 8) & 255; bitBuf >>>= 16; bitCnt -= 16; }
+        }
+        s1 %= 65521; s2 %= 65521;
+    }
+
+    writeBits(HUFF_LIT_CODES[256], HUFF_LIT_LENS[256]);
+    writeBits(0, 3);
+    if (bitCnt > 0) { buf[outPos++] = bitBuf & 255; bitBuf = 0; bitCnt = 0; }
+    buf[outPos++] = 0; buf[outPos++] = 0; buf[outPos++] = 255; buf[outPos++] = 255;
+
+    const payloadLen = outPos - 8;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(0, payloadLen, false);
+    dv.setUint32(outPos, pngCrc32(buf, 4, outPos), false);
+    const idatChunk = buf.slice(0, outPos + 4);
+
+    return {
+        type: 'PNG_STRIP_COMPLETE',
+        stripIndex,
+        idatChunk,
+        rawLen: stripH * (1 + targetW * 3),
+        s1,
+        s2
+    };
+}
+
+// 6. WORKER MESSAGE HANDLER
 self.onmessage = function(e) {
-    if (e.data && e.data.type === 'RENDER_CHUNK') {
+    if (!e.data) return;
+    if (e.data.type === 'RENDER_CHUNK') {
         const result = renderNoiseChunk(e.data);
         self.postMessage(result, [result.data.buffer, result.heightData.buffer]);
+    } else if (e.data.type === 'ENCODE_PNG_STRIP') {
+        const result = encodePngStripIdat(e.data);
+        self.postMessage(result, [result.idatChunk.buffer]);
     }
 };

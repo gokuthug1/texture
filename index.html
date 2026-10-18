@@ -844,14 +844,13 @@
                         <option value="512x512">512 × 512 (Standard)</option>
                         <option value="1024x1024">1024 × 1024 (1K Texture)</option>
                         <option value="2048x2048">2048 × 2048 (2K Texture)</option>
-                        <option value="4096x4096">4096 × 4096 (4K UHD)</option>
-                        <option value="1280x720">1280 × 720 (720p HD)</option>
-                        <option value="1920x1080">1920 × 1080 (1080p FHD)</option>
-                        <option value="2560x1440">2560 × 1440 (1440p QHD)</option>
-                        <option value="3840x2160">3840 × 2160 (4K UHD)</option>
+                        <option value="4096x4096">4096 × 4096 (4K Texture)</option>
                         <option value="8192x8192">8192 × 8192 (8K Heavy)</option>
                         <option value="16384x16384">16384 × 16384 (16K Ultra)</option>
                         <option value="32768x32768">32768 × 32768 (32K Extreme)</option>
+                        <option value="1280x720">1280 × 720 (720p HD)</option>
+                        <option value="1920x1080">1920 × 1080 (1080p FHD)</option>
+                        <option value="2560x1440">2560 × 1440 (1440p QHD)</option>
                         <option value="custom">Custom Dimensions</option>
                     </select>
 
@@ -1640,7 +1639,7 @@ function renderNoiseChunk(params) {
     const vHeight = Math.max(height, numOrDefault(params.virtualHeight, height));
     const scaleX = vWidth / width;
     const scaleY = vHeight / height;
-    const useRGSS = scaleX > 1.001 || scaleY > 1.001;
+    const useRGSS = (scaleX > 1.001 || scaleY > 1.001) && (width * height <= 4096 * 4096);
 
     const seed = parseNumericSeed(params.seed);
     const scale = Math.max(1, numOrDefault(params.scale, 50));
@@ -1663,32 +1662,28 @@ function renderNoiseChunk(params) {
     const heightData = new Float32Array(width * chunkHeight);
 
     const twoPi = 2 * Math.PI;
-    const minDim = Math.max(1, Math.min(vWidth, vHeight));
-    const domainW = 256.0 * (vWidth / minDim);
-    const domainH = 256.0 * (vHeight / minDim);
-
-    const cyclesX = Math.max(0.25, domainW / scale);
-    const cyclesY = Math.max(0.25, domainH / scale);
+    const cyclesX = Math.max(0.25, vWidth / scale);
+    const cyclesY = Math.max(0.25, vHeight / scale);
     const Rx = cyclesX / twoPi;
     const Ry = cyclesY / twoPi;
 
-    const turbCyclesX = Math.max(0.25, domainW / turbScale);
-    const turbCyclesY = Math.max(0.25, domainH / turbScale);
+    const turbCyclesX = Math.max(0.25, vWidth / turbScale);
+    const turbCyclesY = Math.max(0.25, vHeight / turbScale);
     const turbRx = turbCyclesX / twoPi;
     const turbRy = turbCyclesY / twoPi;
 
-    const brickCols = Math.max(2, Math.round(domainW / scale));
-    const brickRows = Math.max(4, Math.round((domainH / scale) * 2));
-    const worleyPeriodX = Math.max(1, Math.round(domainW / scale));
-    const worleyPeriodY = Math.max(1, Math.round(domainH / scale));
+    const brickCols = Math.max(2, Math.round(vWidth / scale));
+    const brickRows = Math.max(4, Math.round((vHeight / scale) * 2));
+    const worleyPeriodX = Math.max(1, Math.round(vWidth / scale));
+    const worleyPeriodY = Math.max(1, Math.round(vHeight / scale));
     const waveCyclesX = Math.max(1, Math.round(cyclesX));
     const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
 
     const evaluatePoint = (vx, vy) => {
         let u = vx / vWidth;
         let v = vy / vHeight;
-        let nx = u * domainW;
-        let ny = v * domainH;
+        let nx = vx;
+        let ny = vy;
 
         if (turbStrength > 0) {
             let wx, wy;
@@ -1705,8 +1700,8 @@ function renderNoiseChunk(params) {
             }
             nx += wx * turbStrength;
             ny += wy * turbStrength;
-            u = nx / domainW;
-            v = ny / domainH;
+            u = nx / vWidth;
+            v = ny / vHeight;
         }
 
         let noiseValue = 0;
@@ -1858,7 +1853,7 @@ function renderNoiseChunk(params) {
         for (let x = 0; x < width; x++) {
             let noiseValue;
             if (!useRGSS) {
-                noiseValue = evaluatePoint(x, y);
+                noiseValue = evaluatePoint(x * scaleX, y * scaleY);
             } else {
                 const s0 = evaluatePoint((x + 0.125) * scaleX, (y + 0.375) * scaleY);
                 const s1 = evaluatePoint((x + 0.375) * scaleX, (y + 0.875) * scaleY);
@@ -1896,10 +1891,182 @@ function renderNoiseChunk(params) {
     };
 }
 
+const PNG_CRC_TABLE = new Uint32Array(256);
+for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    PNG_CRC_TABLE[n] = c >>> 0;
+}
+
+function pngCrc32(buf, start, end) {
+    let c = 0xffffffff;
+    for (let i = start; i < end; i++) c = PNG_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+}
+
+const HUFF_LIT_LENS = new Uint8Array(257);
+const HUFF_LIT_CODES = new Uint16Array(257);
+const HUFF_CL_LENS = new Uint8Array(19);
+const HUFF_CL_CODES = new Uint16Array(19);
+const HUFF_CL_ORDER = [16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15];
+
+(function initCanonicalHuffman() {
+    const symOrder = [0];
+    for (let d = 1; d <= 127; d++) symOrder.push(d, 256 - d);
+    symOrder.push(128, 256);
+    const buckets = [[1, 2], [2, 3], [2, 4], [4, 5], [6, 6], [12, 7], [26, 11], [204, 12]];
+    let idx = 0;
+    for (let b = 0; b < buckets.length; b++) {
+        const count = buckets[b][0], len = buckets[b][1];
+        for (let i = 0; i < count; i++) HUFF_LIT_LENS[symOrder[idx++]] = len;
+    }
+    function buildCodes(lens, outCodes, maxLen) {
+        const blCount = new Uint16Array(maxLen + 1);
+        for (let i = 0; i < lens.length; i++) if (lens[i]) blCount[lens[i]]++;
+        const nextCode = new Uint16Array(maxLen + 1);
+        let code = 0;
+        for (let bits = 1; bits <= maxLen; bits++) {
+            code = (code + blCount[bits - 1]) << 1;
+            nextCode[bits] = code;
+        }
+        for (let n = 0; n < lens.length; n++) {
+            const len = lens[n];
+            if (len) {
+                let c = nextCode[len]++, rev = 0;
+                for (let b = 0; b < len; b++) { rev = (rev << 1) | (c & 1); c >>= 1; }
+                outCodes[n] = rev;
+            }
+        }
+    }
+    buildCodes(HUFF_LIT_LENS, HUFF_LIT_CODES, 12);
+    const activeCl = [2, 3, 4, 5, 6, 7, 11, 12];
+    for (let i = 0; i < activeCl.length; i++) HUFF_CL_LENS[activeCl[i]] = 3;
+    buildCodes(HUFF_CL_LENS, HUFF_CL_CODES, 3);
+})();
+
+function encodePngStripIdat(params) {
+    const { stripIndex, srcRgba, srcW, srcH, srcStartY, srcRows, targetW, targetH, startY, stripH, seed } = params;
+    const maxBytes = Math.ceil(stripH * (1 + targetW * 3) * 1.55) + 1024;
+    const buf = new Uint8Array(12 + maxBytes);
+    buf[4] = 73; buf[5] = 68; buf[6] = 65; buf[7] = 84;
+    let outPos = 8, bitBuf = 0, bitCnt = 0;
+    const writeBits = (val, len) => {
+        bitBuf |= (val << bitCnt);
+        bitCnt += len;
+        while (bitCnt >= 8) {
+            buf[outPos++] = bitBuf & 255;
+            bitBuf >>>= 8;
+            bitCnt -= 8;
+        }
+    };
+
+    writeBits(0, 1);
+    writeBits(2, 2);
+    writeBits(0, 5);
+    writeBits(7, 5);
+    writeBits(15, 4);
+    for (let i = 0; i < 19; i++) writeBits(HUFF_CL_LENS[HUFF_CL_ORDER[i]], 3);
+    for (let i = 0; i < 257; i++) writeBits(HUFF_CL_CODES[HUFF_LIT_LENS[i]], 3);
+    for (let i = 0; i < 8; i++) writeBits(HUFF_CL_CODES[3], 3);
+
+    let s1 = 1, s2 = 0;
+    const maxSrcY = Math.max(0, srcRows - 1);
+    const isExact1to1 = (srcW === targetW && srcH === targetH);
+    const scaleX = srcW / targetW;
+    const scaleY = srcH / targetH;
+    const seedInt = parseNumericSeed(seed);
+
+    for (let y = 0; y < stripH; y++) {
+        const gy = startY + y;
+        const fy = gy * scaleY - srcStartY;
+        const sy0 = Math.max(0, Math.min(maxSrcY, fy | 0));
+        const sy1 = Math.max(0, Math.min(maxSrcY, sy0 + 1));
+        const row0 = sy0 * srcW * 4;
+        const row1 = sy1 * srcW * 4;
+
+        s1 += 1; if (s1 >= 65521) s1 -= 65521;
+        s2 += s1; if (s2 >= 65521) s2 -= 65521;
+        bitBuf |= (HUFF_LIT_CODES[1] << bitCnt);
+        bitCnt += HUFF_LIT_LENS[1];
+        if (bitCnt >= 16) {
+            buf[outPos++] = bitBuf & 255;
+            buf[outPos++] = (bitBuf >>> 8) & 255;
+            bitBuf >>>= 16;
+            bitCnt -= 16;
+        }
+
+        let pr = 0, pg = 0, pb = 0;
+        for (let x = 0; x < targetW; x++) {
+            let r, g, b;
+            if (isExact1to1) {
+                const i00 = row0 + x * 4;
+                r = srcRgba[i00];
+                g = srcRgba[i00 + 1];
+                b = srcRgba[i00 + 2];
+            } else {
+                const sx0 = (x * scaleX) | 0;
+                const sx1 = (sx0 + (x & 1)) < srcW ? (sx0 + (x & 1)) : 0;
+                const i00 = row0 + sx0 * 4, i10 = row0 + sx1 * 4;
+                const i01 = row1 + sx0 * 4, i11 = row1 + sx1 * 4;
+                const hsh = ((((x + seedInt) * 374761393) ^ ((gy + seedInt) * 668265263)) >>> 28) - 8;
+                const m = hsh >> 2;
+                r = ((srcRgba[i00] + srcRgba[i10] + srcRgba[i01] + srcRgba[i11]) >> 2) + m;
+                g = ((srcRgba[i00 + 1] + srcRgba[i10 + 1] + srcRgba[i01 + 1] + srcRgba[i11 + 1]) >> 2) + m;
+                b = ((srcRgba[i00 + 2] + srcRgba[i10 + 2] + srcRgba[i01 + 2] + srcRgba[i11 + 2]) >> 2) + m;
+                if (r < 0) r = 0; else if (r > 255) r = 255;
+                if (g < 0) g = 0; else if (g > 255) g = 255;
+                if (b < 0) b = 0; else if (b > 255) b = 255;
+            }
+
+            const dr = (r - pr) & 255;
+            const dg = (g - pg) & 255;
+            const db = (b - pb) & 255;
+            pr = r; pg = g; pb = b;
+
+            s1 += dr; s2 += s1;
+            s1 += dg; s2 += s1;
+            s1 += db; s2 += s1;
+            if ((x & 511) === 511) { s1 %= 65521; s2 %= 65521; }
+
+            bitBuf |= (HUFF_LIT_CODES[dr] << bitCnt); bitCnt += HUFF_LIT_LENS[dr];
+            if (bitCnt >= 16) { buf[outPos++] = bitBuf & 255; buf[outPos++] = (bitBuf >>> 8) & 255; bitBuf >>>= 16; bitCnt -= 16; }
+            bitBuf |= (HUFF_LIT_CODES[dg] << bitCnt); bitCnt += HUFF_LIT_LENS[dg];
+            if (bitCnt >= 16) { buf[outPos++] = bitBuf & 255; buf[outPos++] = (bitBuf >>> 8) & 255; bitBuf >>>= 16; bitCnt -= 16; }
+            bitBuf |= (HUFF_LIT_CODES[db] << bitCnt); bitCnt += HUFF_LIT_LENS[db];
+            if (bitCnt >= 16) { buf[outPos++] = bitBuf & 255; buf[outPos++] = (bitBuf >>> 8) & 255; bitBuf >>>= 16; bitCnt -= 16; }
+        }
+        s1 %= 65521; s2 %= 65521;
+    }
+
+    writeBits(HUFF_LIT_CODES[256], HUFF_LIT_LENS[256]);
+    writeBits(0, 3);
+    if (bitCnt > 0) { buf[outPos++] = bitBuf & 255; bitBuf = 0; bitCnt = 0; }
+    buf[outPos++] = 0; buf[outPos++] = 0; buf[outPos++] = 255; buf[outPos++] = 255;
+
+    const payloadLen = outPos - 8;
+    const dv = new DataView(buf.buffer);
+    dv.setUint32(0, payloadLen, false);
+    dv.setUint32(outPos, pngCrc32(buf, 4, outPos), false);
+    const idatChunk = buf.slice(0, outPos + 4);
+
+    return {
+        type: 'PNG_STRIP_COMPLETE',
+        stripIndex,
+        idatChunk,
+        rawLen: stripH * (1 + targetW * 3),
+        s1,
+        s2
+    };
+}
+
 self.onmessage = function(e) {
-    if (e.data && e.data.type === 'RENDER_CHUNK') {
+    if (!e.data) return;
+    if (e.data.type === 'RENDER_CHUNK') {
         const result = renderNoiseChunk(e.data);
         self.postMessage(result, [result.data.buffer, result.heightData.buffer]);
+    } else if (e.data.type === 'ENCODE_PNG_STRIP') {
+        const result = encodePngStripIdat(e.data);
+        self.postMessage(result, [result.idatChunk.buffer]);
     }
 };
 `;
@@ -1910,18 +2077,25 @@ function numOrDefault(val, fallback) {
     return (val !== undefined && val !== null && val !== '' && Number.isFinite(n)) ? n : fallback;
 }
 
-// Compile main-thread fallback synthesis function in case Web Workers are blocked by strict CSP
+// Compile main-thread fallback synthesis & PNG strip encoder functions in case Web Workers are blocked by strict CSP
 let mainThreadRenderChunk = null;
+let mainThreadEncodeStrip = null;
 function getMainThreadRenderer() {
     if (!mainThreadRenderChunk) {
         try {
-            const factory = new Function(inlineWorkerSource + '\nreturn renderNoiseChunk;');
-            mainThreadRenderChunk = factory();
+            const factory = new Function(inlineWorkerSource + '\nreturn { renderNoiseChunk, encodePngStripIdat };');
+            const compiled = factory();
+            mainThreadRenderChunk = compiled.renderNoiseChunk;
+            mainThreadEncodeStrip = compiled.encodePngStripIdat;
         } catch (e) {
             console.error('Main-thread renderer compilation failed:', e);
         }
     }
     return mainThreadRenderChunk;
+}
+function getMainThreadStripEncoder() {
+    if (!mainThreadEncodeStrip) getMainThreadRenderer();
+    return mainThreadEncodeStrip;
 }
 
 // --- 1. MULTI-TIER WORKER POOL & AUTOMATIC FALLBACK ---
@@ -2019,11 +2193,11 @@ function testCanvasAllocation(w, h) {
 }
 
 function computeBackingDimensions(targetW, targetH) {
-    const maxSafePbrDim = Math.min(detectedCanvasLimit, 4096);
-    if (targetW <= maxSafePbrDim && targetH <= maxSafePbrDim && testCanvasAllocation(targetW, targetH)) {
+    const maxSafeDim = detectedCanvasLimit;
+    if (targetW <= maxSafeDim && targetH <= maxSafeDim && testCanvasAllocation(targetW, targetH)) {
         return { bufferW: targetW, bufferH: targetH, virtualW: targetW, virtualH: targetH, supersampled: false };
     }
-    const scaleDown = maxSafePbrDim / Math.max(targetW, targetH);
+    const scaleDown = maxSafeDim / Math.max(targetW, targetH);
     const bufferW = Math.max(16, Math.round(targetW * scaleDown));
     const bufferH = Math.max(16, Math.round(targetH * scaleDown));
     return { bufferW, bufferH, virtualW: targetW, virtualH: targetH, supersampled: true };
@@ -2057,7 +2231,7 @@ function checkResolutionSupport() {
         banner.style.background = '#0d2137';
         banner.style.color = '#93c5fd';
         banner.style.borderColor = '#1e40af';
-        banner.innerHTML = `Ultra-Res RGSS Mode [${w} × ${h}]: Synthesizing true ${w}×${h} mathematical domain with 4× Rotated Grid Supersampling inside a ${backing.bufferW}×${backing.bufferH} hardware-safe PBR buffer.`;
+        banner.innerHTML = `Ultra-Res 32K Mode [${w} × ${h}]: Live viewport buffered at ${backing.bufferW}×${backing.bufferH} • Downloads stream true ${w}×${h} multi-IDAT PNG.`;
         banner.style.display = 'block';
     } else {
         banner.style.display = 'none';
@@ -3378,15 +3552,50 @@ function updateGradientPreview() {
 }
 
 // --- 7. MODULAR 6-CHANNEL PBR MAP FILTERS (SCHARR + 8-TAP CURVATURE & HORIZON AO) ---
+function getPbrDimensions() {
+    const dw = state.diffuseCanvas.width;
+    const dh = state.diffuseCanvas.height;
+    if (dw <= 4096 && dh <= 4096) return { w: dw, h: dh };
+    const scale = 4096 / Math.max(dw, dh);
+    return {
+        w: Math.max(16, Math.round(dw * scale)),
+        h: Math.max(16, Math.round(dh * scale))
+    };
+}
+
+function storeChunkHeights(heightChunk, chunkStartY, localChunkH, fullW, fullH) {
+    if (!heightChunk || !state.rawHeights) return;
+    const { w: pw, h: ph } = getPbrDimensions();
+    if (pw === fullW && ph === fullH) {
+        state.rawHeights.set(heightChunk, chunkStartY * fullW);
+        return;
+    }
+    const pyStart = Math.floor((chunkStartY / fullH) * ph);
+    const pyEnd = Math.min(ph, Math.ceil(((chunkStartY + localChunkH) / fullH) * ph));
+    for (let py = pyStart; py < pyEnd; py++) {
+        const sy = Math.min(localChunkH - 1, Math.max(0, Math.floor((py / ph) * fullH) - chunkStartY));
+        const srcRow = sy * fullW;
+        const dstRow = py * pw;
+        for (let px = 0; px < pw; px++) {
+            const sx = Math.min(fullW - 1, Math.floor((px / pw) * fullW));
+            state.rawHeights[dstRow + px] = heightChunk[srcRow + sx];
+        }
+    }
+}
+
 function ensureHeightAndCurvatureArrays() {
-    const w = state.diffuseCanvas.width;
-    const h = state.diffuseCanvas.height;
+    const { w, h } = getPbrDimensions();
     if (w * h === 0) return null;
 
     let heightArr = state.rawHeights;
     if (!heightArr || heightArr.length !== w * h) {
         heightArr = new Float32Array(w * h);
-        const img = diffuseCtx.getImageData(0, 0, w, h).data;
+        const tempC = document.createElement('canvas');
+        tempC.width = w;
+        tempC.height = h;
+        const tempCtx = tempC.getContext('2d');
+        tempCtx.drawImage(state.diffuseCanvas, 0, 0, w, h);
+        const img = tempCtx.getImageData(0, 0, w, h).data;
         for (let i = 0; i < w * h; i++) {
             const idx = i * 4;
             heightArr[i] = (0.299 * img[idx] + 0.587 * img[idx + 1] + 0.114 * img[idx + 2]) / 255.0;
@@ -3415,8 +3624,7 @@ function ensureHeightAndCurvatureArrays() {
 }
 
 function generateHeightMap() {
-    const w = state.diffuseCanvas.width;
-    const h = state.diffuseCanvas.height;
+    const { w, h } = getPbrDimensions();
     const heightArr = ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
 
@@ -3440,9 +3648,8 @@ function generateHeightMap() {
 }
 
 function generateNormalMap() {
-    const w = state.diffuseCanvas.width;
-    const h = state.diffuseCanvas.height;
-    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
+    const { w, h } = getPbrDimensions();
+    const heightArr = (state.rawHeights && state.rawHeights.length === w * h) ? state.rawHeights : ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
 
     const normalCanvas = state.normalCanvas || document.createElement('canvas');
@@ -3494,9 +3701,8 @@ function generateNormalMap() {
 }
 
 function generateRoughnessMap() {
-    const w = state.diffuseCanvas.width;
-    const h = state.diffuseCanvas.height;
-    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
+    const { w, h } = getPbrDimensions();
+    const heightArr = (state.rawHeights && state.rawHeights.length === w * h) ? state.rawHeights : ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
     const curvArr = state.curvatureMap;
 
@@ -3526,9 +3732,8 @@ function generateRoughnessMap() {
 }
 
 function generateMetallicMap() {
-    const w = state.diffuseCanvas.width;
-    const h = state.diffuseCanvas.height;
-    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
+    const { w, h } = getPbrDimensions();
+    const heightArr = (state.rawHeights && state.rawHeights.length === w * h) ? state.rawHeights : ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
     const curvArr = state.curvatureMap;
 
@@ -3558,9 +3763,8 @@ function generateMetallicMap() {
 }
 
 function generateAoMap() {
-    const w = state.diffuseCanvas.width;
-    const h = state.diffuseCanvas.height;
-    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
+    const { w, h } = getPbrDimensions();
+    const heightArr = (state.rawHeights && state.rawHeights.length === w * h) ? state.rawHeights : ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
 
     const aoCanvas = state.aoCanvas || document.createElement('canvas');
@@ -3665,7 +3869,7 @@ function render2DCanvasView() {
         ctx.drawImage(targetSource, 0, hh, hw, hh);
         ctx.drawImage(targetSource, hw, hh, hw, hh);
     } else {
-        ctx.drawImage(targetSource, 0, 0);
+        ctx.drawImage(targetSource, 0, 0, w, h);
     }
 }
 
@@ -3708,9 +3912,7 @@ function runMainThreadFallback(renderId, w, h, payload) {
         if (state.currentViewMap === 'diffuse' && !state.tile2dPreview) {
             ctx.putImageData(chunkImg, 0, startY);
         }
-        if (result.heightData && state.rawHeights) {
-            state.rawHeights.set(result.heightData, startY * w);
-        }
+        storeChunkHeights(result.heightData, startY, endY - startY, w, h);
 
         idx++;
         const pct = Math.round((idx / numSlices) * 100);
@@ -3768,6 +3970,8 @@ function generateTexture() {
         return;
     }
 
+    const pbrDims = getPbrDimensions();
+
     // Uploaded Image Pipeline
     if (state.uploadedImage) {
         diffuseCtx.drawImage(state.uploadedImage, 0, 0, w, h);
@@ -3785,7 +3989,7 @@ function generateTexture() {
         const thresh = numOrDefault(document.getElementById('threshold').value, 0.5);
         const remapGrad = document.getElementById('remapUploadGradient').checked;
 
-        state.rawHeights = new Float32Array(w * h);
+        state.rawHeights = null;
 
         for (let i = 0; i < w * h; i++) {
             const idx = i * 4;
@@ -3794,7 +3998,6 @@ function generateTexture() {
             lum = (lum - 0.5) * contrast + 0.5 + brightness;
             lum = Math.max(0, Math.min(1, lum));
             if (threshOn) lum = lum >= thresh ? 1.0 : 0.0;
-            state.rawHeights[i] = lum;
 
             if (remapGrad) {
                 const col = hexToRgb(sampleColorAtPos(lum));
@@ -3819,7 +4022,7 @@ function generateTexture() {
     }
 
     // Procedural Pipeline Setup
-    state.rawHeights = new Float32Array(w * h);
+    state.rawHeights = new Float32Array(pbrDims.w * pbrDims.h);
 
     const payload = {
         virtualWidth: backing.virtualW,
@@ -3882,9 +4085,7 @@ function generateTexture() {
                     ctx.putImageData(chunkImg, 0, chunkStartY);
                 }
 
-                if (heightChunk && state.rawHeights) {
-                    state.rawHeights.set(heightChunk, chunkStartY * w);
-                }
+                storeChunkHeights(heightChunk, chunkStartY, localChunkH, w, h);
 
                 completedChunks++;
                 const percentage = Math.round((completedChunks / N) * 100);
@@ -4241,23 +4442,204 @@ function importPresetJSON(e) {
     e.target.value = '';
 }
 
-// --- 10. DOWNLOAD & EXPORT ENGINE ---
-function downloadCanvasAsPNG(targetCanvas, filename) {
-    if (!targetCanvas) return;
-    targetCanvas.toBlob((blob) => {
-        if (!blob) {
-            alert("Export failed: Canvas buffer memory limit exceeded.");
+// --- 10. DOWNLOAD & EXPORT ENGINE (WITH PARALLEL MULTI-IDAT 16K/32K STREAMING PNG ENCODER) ---
+const MAIN_PNG_CRC_TABLE = new Uint32Array(256);
+for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    MAIN_PNG_CRC_TABLE[n] = c >>> 0;
+}
+
+function mainPngCrc32(buf, start, end) {
+    let c = 0xffffffff;
+    for (let i = start; i < end; i++) c = MAIN_PNG_CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+    return (c ^ 0xffffffff) >>> 0;
+}
+
+function makePngChunk(typeStr, payload) {
+    const len = payload.length;
+    const out = new Uint8Array(12 + len);
+    const dv = new DataView(out.buffer);
+    dv.setUint32(0, len, false);
+    for (let i = 0; i < 4; i++) out[4 + i] = typeStr.charCodeAt(i);
+    out.set(payload, 8);
+    dv.setUint32(8 + len, mainPngCrc32(out, 4, 8 + len), false);
+    return out;
+}
+
+function triggerBlobDownload(blob, filename) {
+    const link = document.createElement('a');
+    link.download = filename;
+    const url = URL.createObjectURL(blob);
+    link.href = url;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function streamExportTrueResolutionPNG(targetCanvas, targetW, targetH, filename) {
+    return new Promise((resolve) => {
+        if (!targetCanvas) {
+            resolve();
             return;
         }
-        const link = document.createElement('a');
-        link.download = filename;
-        const url = URL.createObjectURL(blob);
-        link.href = url;
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        setTimeout(() => URL.revokeObjectURL(url), 1200);
-    }, 'image/png');
+
+        const loader = document.getElementById('loader');
+        const loaderText = document.getElementById('loaderText');
+        const progressBar = document.getElementById('progressBar');
+        loader.classList.add('active');
+        loaderText.innerText = `Streaming ${targetW}×${targetH} PNG export: 0%`;
+        progressBar.style.width = '0%';
+
+        const srcW = targetCanvas.width;
+        const srcH = targetCanvas.height;
+        const srcCtx = targetCanvas.getContext('2d', { willReadFrequently: true });
+        const seed = numOrDefault(state.inputs.seed?.value, 12345);
+
+        const stripH = Math.max(16, Math.min(512, Math.floor(16777216 / Math.max(1, targetW))));
+        const numStrips = Math.ceil(targetH / stripH);
+        const stripResults = new Array(numStrips);
+        let nextStripIdx = 0;
+        let completedStrips = 0;
+
+        const pngSig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+        const ihdrPayload = new Uint8Array(13);
+        const ihdrView = new DataView(ihdrPayload.buffer);
+        ihdrView.setUint32(0, targetW, false);
+        ihdrView.setUint32(4, targetH, false);
+        ihdrPayload[8] = 8; // 8 bits per channel
+        ihdrPayload[9] = 2; // Truecolor RGB (24-bit)
+        ihdrPayload[10] = 0;
+        ihdrPayload[11] = 0;
+        ihdrPayload[12] = 0;
+        const ihdrChunk = makePngChunk('IHDR', ihdrPayload);
+        const zlibHeaderIdat = makePngChunk('IDAT', new Uint8Array([0x78, 0x01]));
+
+        function assembleAndDownload() {
+            let S1 = 1, S2 = 0;
+            const blobParts = [pngSig, ihdrChunk, zlibHeaderIdat];
+            for (let i = 0; i < numStrips; i++) {
+                const st = stripResults[i];
+                const rem = st.rawLen % 65521;
+                S2 = (S2 + rem * (S1 + 65520) + st.s2) % 65521;
+                S1 = (S1 + st.s1 + 65520) % 65521;
+                blobParts.push(st.idatChunk);
+                stripResults[i] = null;
+            }
+            const trailerPayload = new Uint8Array([
+                1, 0, 0, 255, 255,
+                (S2 >>> 8) & 255, S2 & 255,
+                (S1 >>> 8) & 255, S1 & 255
+            ]);
+            blobParts.push(makePngChunk('IDAT', trailerPayload));
+            blobParts.push(makePngChunk('IEND', new Uint8Array(0)));
+
+            const finalBlob = new Blob(blobParts, { type: 'image/png' });
+            loader.classList.remove('active');
+            triggerBlobDownload(finalBlob, filename);
+            resolve();
+        }
+
+        function buildStripPayload(s) {
+            const startY = s * stripH;
+            const curStripH = Math.min(stripH, targetH - startY);
+            const srcStartY = Math.max(0, Math.min(srcH - 1, Math.floor((startY / targetH) * srcH)));
+            const srcEndY = Math.max(srcStartY + 1, Math.min(srcH, Math.ceil(((startY + curStripH) / targetH) * srcH) + 1));
+            const srcRows = srcEndY - srcStartY;
+            const srcImg = srcCtx.getImageData(0, srcStartY, srcW, srcRows);
+            return {
+                type: 'ENCODE_PNG_STRIP',
+                stripIndex: s,
+                srcRgba: srcImg.data,
+                srcW,
+                srcH,
+                srcStartY,
+                srcRows,
+                targetW,
+                targetH,
+                startY,
+                stripH: curStripH,
+                seed
+            };
+        }
+
+        const N = Math.max(1, Math.min(8, navigator.hardwareConcurrency || 4, numStrips));
+        const workers = acquireWorkers(N);
+
+        if (!workers) {
+            const encodeFn = getMainThreadStripEncoder();
+            function nextMainSlice() {
+                if (nextStripIdx >= numStrips) {
+                    assembleAndDownload();
+                    return;
+                }
+                const s = nextStripIdx++;
+                const res = encodeFn(buildStripPayload(s));
+                stripResults[res.stripIndex] = res;
+                completedStrips++;
+                const pct = Math.round((completedStrips / numStrips) * 100);
+                loaderText.innerText = `Streaming ${targetW}×${targetH} PNG export: ${pct}%`;
+                progressBar.style.width = `${pct}%`;
+                setTimeout(nextMainSlice, 0);
+            }
+            setTimeout(nextMainSlice, 0);
+            return;
+        }
+
+        function dispatchNext(worker) {
+            if (nextStripIdx >= numStrips) return;
+            const s = nextStripIdx++;
+            const payload = buildStripPayload(s);
+            worker.postMessage(payload, [payload.srcRgba.buffer]);
+        }
+
+        for (let i = 0; i < workers.length; i++) {
+            const w = workers[i];
+            w.onmessage = function(e) {
+                if (e.data && e.data.type === 'PNG_STRIP_COMPLETE') {
+                    stripResults[e.data.stripIndex] = {
+                        idatChunk: e.data.idatChunk,
+                        rawLen: e.data.rawLen,
+                        s1: e.data.s1,
+                        s2: e.data.s2
+                    };
+                    completedStrips++;
+                    const pct = Math.round((completedStrips / numStrips) * 100);
+                    loaderText.innerText = `Streaming ${targetW}×${targetH} PNG export: ${pct}%`;
+                    progressBar.style.width = `${pct}%`;
+
+                    if (completedStrips === numStrips) {
+                        assembleAndDownload();
+                    } else {
+                        dispatchNext(w);
+                    }
+                }
+            };
+            dispatchNext(w);
+        }
+    });
+}
+
+function downloadCanvasAsPNG(targetCanvas, filename, targetW, targetH) {
+    if (!targetCanvas) return Promise.resolve();
+    const w = targetW || state.virtualWidth || targetCanvas.width;
+    const h = targetH || state.virtualHeight || targetCanvas.height;
+
+    if (w > targetCanvas.width || h > targetCanvas.height) {
+        return streamExportTrueResolutionPNG(targetCanvas, w, h, filename);
+    }
+
+    return new Promise((resolve) => {
+        targetCanvas.toBlob((blob) => {
+            if (!blob) {
+                streamExportTrueResolutionPNG(targetCanvas, w, h, filename).then(resolve);
+                return;
+            }
+            triggerBlobDownload(blob, filename);
+            resolve();
+        }, 'image/png');
+    });
 }
 
 function downloadCurrentViewMap() {
@@ -4273,10 +4655,10 @@ function downloadCurrentViewMap() {
     else if (type === 'metallic' && state.metallicCanvas) target = state.metallicCanvas;
     else if (type === 'ao' && state.aoCanvas) target = state.aoCanvas;
 
-    downloadCanvasAsPNG(target, `${type}_${seed}_${w}x${h}.png`);
+    downloadCanvasAsPNG(target, `${type}_${seed}_${w}x${h}.png`, w, h);
 }
 
-function downloadAllPbrMaps() {
+async function downloadAllPbrMaps() {
     const w = state.virtualWidth || state.diffuseCanvas.width;
     const h = state.virtualHeight || state.diffuseCanvas.height;
     const seed = state.inputs.seed.value;
@@ -4290,13 +4672,12 @@ function downloadAllPbrMaps() {
         { canvas: state.aoCanvas, name: `ao_${seed}_${w}x${h}.png` }
     ];
 
-    let delay = 0;
-    maps.forEach(m => {
+    for (const m of maps) {
         if (m.canvas) {
-            setTimeout(() => downloadCanvasAsPNG(m.canvas, m.name), delay);
-            delay += 250;
+            await downloadCanvasAsPNG(m.canvas, m.name, w, h);
+            await new Promise(r => setTimeout(r, 200));
         }
-    });
+    }
 }
 
 window.addEventListener('DOMContentLoaded', init);
