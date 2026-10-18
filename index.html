@@ -570,9 +570,20 @@
             font-family: inherit;
         }
 
-        .btn-small:hover {
+        .btn-small:hover:not(:disabled) {
             background: var(--color-surface-hover);
             border-color: var(--color-text-muted);
+        }
+
+        .btn-small:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .btn-small.active-toggle {
+            background: var(--color-primary);
+            border-color: var(--color-primary);
+            color: #ffffff;
         }
 
         button:focus-visible {
@@ -671,12 +682,14 @@
             display: flex;
             gap: 6px;
             margin-top: var(--space-2);
+            flex-wrap: wrap;
         }
 
         .preset-io-row button {
             flex: 1;
             padding: 6px 8px;
             font-size: 0.72rem;
+            justify-content: center;
         }
 
         /* --- Channel Switcher Pills --- */
@@ -739,7 +752,7 @@
 
     <header>
         <h1>Texture Engine <span>3D Pro</span></h1>
-        <div class="subtitle">Multi-Threaded Procedural PBR Material Generator • 4D Toroidal Seamless Noise</div>
+        <div class="subtitle">Multi-Threaded Procedural PBR Material Generator • 4D Toroidal Seamless Noise • Scharr & Curvature Pipeline</div>
     </header>
 
     <main class="main-container">
@@ -806,13 +819,21 @@
                     </select>
 
                     <div class="preset-io-row">
+                        <button type="button" class="btn-small" id="undoBtn" disabled title="Undo (Ctrl+Z)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="9 14 4 9 9 4"/><path d="M20 20v-7a4 4 0 0 0-4-4H4"/></svg>
+                            Undo
+                        </button>
+                        <button type="button" class="btn-small" id="redoBtn" disabled title="Redo (Ctrl+Y)">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="15 14 20 9 15 4"/><path d="M4 20v-7a4 4 0 0 1 4-4h12"/></svg>
+                            Redo
+                        </button>
                         <button type="button" class="btn-small" id="exportPresetBtn">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-                            Export Preset
+                            Export
                         </button>
                         <button type="button" class="btn-small" id="importPresetBtn">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                            Import Preset
+                            Import
                         </button>
                         <input type="file" id="presetFileInput" accept=".json" style="display:none;" aria-label="Upload preset JSON file">
                     </div>
@@ -882,7 +903,7 @@
 
                     <div class="checkbox-row">
                         <input type="checkbox" id="ridged">
-                        <label for="ridged">Ridged mode (Inverted sharp peaks)</label>
+                        <label for="ridged">Ridged multifractal mode (Sharp peaks)</label>
                     </div>
                 </div>
             </details>
@@ -1049,7 +1070,7 @@
                         <input type="checkbox" id="directXNormalCheckbox">
                         <label for="directXNormalCheckbox">DirectX normal map format (−Y inverted)</label>
                     </div>
-                    <label for="normalStrength">Normal Filter Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
+                    <label for="normalStrength">Scharr Normal Filter Strength: <span class="val" id="normalStrengthVal">3.0</span></label>
                     <input type="range" id="normalStrength" min="0.5" max="10.0" step="0.1" value="3.0">
                 </div>
             </details>
@@ -1157,6 +1178,10 @@
                         </div>
                     </div>
                     <div class="header-controls">
+                        <button type="button" class="btn-small" id="tile2dToggleBtn" title="Toggle 2×2 seamless seam inspection on 2D canvas">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                            2×2 Seam View
+                        </button>
                         <button type="button" class="btn-small btn-download" id="downloadCurrentBtn">
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                             Download Map
@@ -1204,31 +1229,61 @@ class SeededRandom {
 
 const lerp = (a, b, t) => a + t * (b - a);
 const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+const hermite = t => t * t * (3.0 - 2.0 * t);
+
 const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
 const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
 const F4 = (Math.sqrt(5.0) - 1.0) / 4.0;
 const G4 = (5.0 - Math.sqrt(5.0)) / 20.0;
-const grad2 = [[1,1],[-1,1],[1,-1],[-1,-1],[1,0],[-1,0],[0,1],[0,-1]];
+
+const ROT2_COS = 0.8;
+const ROT2_SIN = 0.6;
+
+const grad2 = [
+    [1, 1], [-1, 1], [1, -1], [-1, -1],
+    [1, 0], [-1, 0], [0, 1], [0, -1]
+].map(v => {
+    const len = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+    return [v[0] / len, v[1] / len];
+});
+
 const grad4 = [
-    [0,1,1,1],[0,1,1,-1],[0,1,-1,1],[0,1,-1,-1],[0,-1,1,1],[0,-1,1,-1],[0,-1,-1,1],[0,-1,-1,-1],
-    [1,0,1,1],[1,0,1,-1],[1,0,-1,1],[1,0,-1,-1],[-1,0,1,1],[-1,0,1,-1],[-1,0,-1,1],[-1,0,-1,-1],
-    [1,1,0,1],[1,1,0,-1],[1,-1,0,1],[1,-1,0,-1],[-1,1,0,1],[-1,1,0,-1],[-1,-1,0,1],[-1,-1,0,-1],
-    [1,1,1,0],[1,1,-1,0],[1,-1,1,0],[1,-1,-1,0],[-1,1,1,0],[-1,1,-1,0],[-1,-1,1,0],[-1,-1,-1,0]
-].map(v => { const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3]); return [v[0]/len, v[1]/len, v[2]/len, v[3]/len]; });
+    [0, 1, 1, 1], [0, 1, 1, -1], [0, 1, -1, 1], [0, 1, -1, -1],
+    [0, -1, 1, 1], [0, -1, 1, -1], [0, -1, -1, 1], [0, -1, -1, -1],
+    [1, 0, 1, 1], [1, 0, 1, -1], [1, 0, -1, 1], [1, 0, -1, -1],
+    [-1, 0, 1, 1], [-1, 0, 1, -1], [-1, 0, -1, 1], [-1, 0, -1, -1],
+    [1, 1, 0, 1], [1, 1, 0, -1], [1, -1, 0, 1], [1, -1, 0, -1],
+    [-1, 1, 0, 1], [-1, 1, 0, -1], [-1, -1, 0, 1], [-1, -1, 0, -1],
+    [1, 1, 1, 0], [1, 1, -1, 0], [1, -1, 1, 0], [1, -1, -1, 0],
+    [-1, 1, 1, 0], [-1, 1, -1, 0], [-1, -1, 1, 0], [-1, -1, -1, 0]
+].map(v => {
+    const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
+    return [v[0] / len, v[1] / len, v[2] / len, v[3] / len];
+});
+
+const OCTAVE_OFFSETS_4D = Array.from({ length: 16 }, (_, o) => [
+    o * 17.31,
+    o * 29.47,
+    o * 43.19,
+    o * 61.83
+]);
 
 class NoiseGenerator {
     constructor(seed) {
         this.seed = parseNumericSeed(seed);
         this.prng = new SeededRandom(this.seed);
         this.p = new Uint8Array(256);
-        for(let i=0; i<256; i++) this.p[i] = i;
-        for(let i=255; i>0; i--) {
+        for (let i = 0; i < 256; i++) this.p[i] = i;
+        for (let i = 255; i > 0; i--) {
             const r = Math.floor(this.prng.next() * (i + 1));
-            const tmp = this.p[i]; this.p[i] = this.p[r]; this.p[r] = tmp;
+            const tmp = this.p[i];
+            this.p[i] = this.p[r];
+            this.p[r] = tmp;
         }
         this.perm = new Uint16Array(1024);
-        for(let i=0; i<1024; i++) this.perm[i] = this.p[i & 255];
+        for (let i = 0; i < 1024; i++) this.perm[i] = this.p[i & 255];
     }
+
     cellHash(ix, iy, channel) {
         let h = (
             Math.imul(ix | 0, 374761393) +
@@ -1239,23 +1294,33 @@ class NoiseGenerator {
         h = Math.imul(h ^ (h >>> 13), 1274126177);
         return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
     }
+
     gradPerlin2D(hash, x, y) {
         const h = hash & 15;
         const u = h < 8 ? x : y;
         const v = h < 4 ? y : (h === 12 || h === 14 ? x : 0);
         return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
     }
+
     perlin(x, y) {
-        const xi = Math.floor(x); const yi = Math.floor(y);
-        const X = xi & 255; const Y = yi & 255;
-        const fx = x - xi; const fy = y - yi;
-        const u = fade(fx); const v = fade(fy);
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const X = xi & 255;
+        const Y = yi & 255;
+        const fx = x - xi;
+        const fy = y - yi;
+        const u = fade(fx);
+        const v = fade(fy);
         const perm = this.perm;
         const A = perm[X] + Y, AA = perm[A], AB = perm[A + 1];
         const B = perm[X + 1] + Y, BA = perm[B], BB = perm[B + 1];
-        return lerp(lerp(this.gradPerlin2D(perm[AA], fx, fy), this.gradPerlin2D(perm[BA], fx - 1, fy), u),
-                    lerp(this.gradPerlin2D(perm[AB], fx, fy - 1), this.gradPerlin2D(perm[BB], fx - 1, fy - 1), u), v);
+        return lerp(
+            lerp(this.gradPerlin2D(perm[AA], fx, fy), this.gradPerlin2D(perm[BA], fx - 1, fy), u),
+            lerp(this.gradPerlin2D(perm[AB], fx, fy - 1), this.gradPerlin2D(perm[BB], fx - 1, fy - 1), u),
+            v
+        );
     }
+
     perlin4d(x, y, z, w) {
         const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), wi = Math.floor(w);
         const ix0 = xi & 255, iy0 = yi & 255, iz0 = zi & 255, iw0 = wi & 255;
@@ -1280,7 +1345,7 @@ class NoiseGenerator {
         const h0111 = perm[h011 + iw1], h1111 = perm[h111 + iw1];
         const dot = (hash, dx, dy, dz, dw) => {
             const g = grad4[hash & 31];
-            return g[0]*dx + g[1]*dy + g[2]*dz + g[3]*dw;
+            return g[0] * dx + g[1] * dy + g[2] * dz + g[3] * dw;
         };
         const n0000 = dot(h0000, fx, fy, fz, fw);
         const n1000 = dot(h1000, fx - 1, fy, fz, fw);
@@ -1307,50 +1372,51 @@ class NoiseGenerator {
         const z0 = lerp(y00, y10, t), z1 = lerp(y01, y11, t);
         return Math.max(-1, Math.min(1, lerp(z0, z1, s) * 1.45));
     }
+
     simplex2d(x, y) {
         const s = (x + y) * F2;
-        const i = Math.floor(x + s); const j = Math.floor(y + s);
+        const i = Math.floor(x + s), j = Math.floor(y + s);
         const t = (i + j) * G2;
-        const X0 = i - t; const Y0 = j - t;
-        const x0 = x - X0; const y0 = y - Y0;
+        const X0 = i - t, Y0 = j - t;
+        const x0 = x - X0, y0 = y - Y0;
         let i1 = x0 > y0 ? 1 : 0, j1 = x0 > y0 ? 0 : 1;
-        const x1 = x0 - i1 + G2; const y1 = y0 - j1 + G2;
-        const x2 = x0 - 1.0 + 2.0 * G2; const y2 = y0 - 1.0 + 2.0 * G2;
+        const x1 = x0 - i1 + G2, y1 = y0 - j1 + G2;
+        const x2 = x0 - 1.0 + 2.0 * G2, y2 = y0 - 1.0 + 2.0 * G2;
         const perm = this.perm;
-        const ii = i & 255; const jj = j & 255;
+        const ii = i & 255, jj = j & 255;
         const gi0 = perm[ii + perm[jj]] & 7;
         const gi1 = perm[ii + i1 + perm[jj + j1]] & 7;
         const gi2 = perm[ii + 1 + perm[jj + 1]] & 7;
         let n0 = 0, n1 = 0, n2 = 0;
-        let t0 = 0.5 - x0*x0 - y0*y0;
+        let t0 = 0.5 - x0 * x0 - y0 * y0;
         if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad2[gi0][0] * x0 + grad2[gi0][1] * y0); }
-        let t1 = 0.5 - x1*x1 - y1*y1;
+        let t1 = 0.5 - x1 * x1 - y1 * y1;
         if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad2[gi1][0] * x1 + grad2[gi1][1] * y1); }
-        let t2 = 0.5 - x2*x2 - y2*y2;
+        let t2 = 0.5 - x2 * x2 - y2 * y2;
         if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad2[gi2][0] * x2 + grad2[gi2][1] * y2); }
-        return 70.0 * (n0 + n1 + n2);
+        return Math.max(-1, Math.min(1, 99.0 * (n0 + n1 + n2)));
     }
+
     simplex4d(x, y, z, w) {
         const s = (x + y + z + w) * F4;
-        const i = Math.floor(x + s); const j = Math.floor(y + s);
-        const k = Math.floor(z + s); const l = Math.floor(w + s);
+        const i = Math.floor(x + s), j = Math.floor(y + s), k = Math.floor(z + s), l = Math.floor(w + s);
         const t = (i + j + k + l) * G4;
-        const X0 = i - t; const Y0 = j - t; const Z0 = k - t; const W0 = l - t;
-        const x0 = x - X0; const y0 = y - Y0; const z0 = z - Z0; const w0 = w - W0;
+        const X0 = i - t, Y0 = j - t, Z0 = k - t, W0 = l - t;
+        const x0 = x - X0, y0 = y - Y0, z0 = z - Z0, w0 = w - W0;
         let c = 0;
         if (x0 > y0) c |= 1; if (x0 > z0) c |= 2; if (x0 > w0) c |= 4;
         if (y0 > z0) c |= 8; if (y0 > w0) c |= 16; if (z0 > w0) c |= 32;
-        const rankx = ((c & 1)?1:0) + ((c & 2)?1:0) + ((c & 4)?1:0);
-        const ranky = ((c & 1)?0:1) + ((c & 8)?1:0) + ((c & 16)?1:0);
-        const rankz = ((c & 2)?0:1) + ((c & 8)?0:1) + ((c & 32)?1:0);
-        const rankw = ((c & 4)?0:1) + ((c & 16)?0:1) + ((c & 32)?0:1);
-        const i1 = rankx >= 3?1:0, j1 = ranky >= 3?1:0, k1 = rankz >= 3?1:0, l1 = rankw >= 3?1:0;
-        const i2 = rankx >= 2?1:0, j2 = ranky >= 2?1:0, k2 = rankz >= 2?1:0, l2 = rankw >= 2?1:0;
-        const i3 = rankx >= 1?1:0, j3 = ranky >= 1?1:0, k3 = rankz >= 1?1:0, l3 = rankw >= 1?1:0;
+        const rankx = ((c & 1) ? 1 : 0) + ((c & 2) ? 1 : 0) + ((c & 4) ? 1 : 0);
+        const ranky = ((c & 1) ? 0 : 1) + ((c & 8) ? 1 : 0) + ((c & 16) ? 1 : 0);
+        const rankz = ((c & 2) ? 0 : 1) + ((c & 8) ? 0 : 1) + ((c & 32) ? 1 : 0);
+        const rankw = ((c & 4) ? 0 : 1) + ((c & 16) ? 0 : 1) + ((c & 32) ? 0 : 1);
+        const i1 = rankx >= 3 ? 1 : 0, j1 = ranky >= 3 ? 1 : 0, k1 = rankz >= 3 ? 1 : 0, l1 = rankw >= 3 ? 1 : 0;
+        const i2 = rankx >= 2 ? 1 : 0, j2 = ranky >= 2 ? 1 : 0, k2 = rankz >= 2 ? 1 : 0, l2 = rankw >= 2 ? 1 : 0;
+        const i3 = rankx >= 1 ? 1 : 0, j3 = ranky >= 1 ? 1 : 0, k3 = rankz >= 1 ? 1 : 0, l3 = rankw >= 1 ? 1 : 0;
         const x1 = x0 - i1 + G4, y1 = y0 - j1 + G4, z1 = z0 - k1 + G4, w1 = w0 - l1 + G4;
-        const x2 = x0 - i2 + 2.0*G4, y2 = y0 - j2 + 2.0*G4, z2 = z0 - k2 + 2.0*G4, w2 = w0 - l2 + 2.0*G4;
-        const x3 = x0 - i3 + 3.0*G4, y3 = y0 - j3 + 3.0*G4, z3 = z0 - k3 + 3.0*G4, w3 = w0 - l3 + 3.0*G4;
-        const x4 = x0 - 1.0 + 4.0*G4, y4 = y0 - 1.0 + 4.0*G4, z4 = z0 - 1.0 + 4.0*G4, w4 = w0 - 1.0 + 4.0*G4;
+        const x2 = x0 - i2 + 2.0 * G4, y2 = y0 - j2 + 2.0 * G4, z2 = z0 - k2 + 2.0 * G4, w2 = w0 - l2 + 2.0 * G4;
+        const x3 = x0 - i3 + 3.0 * G4, y3 = y0 - j3 + 3.0 * G4, z3 = z0 - k3 + 3.0 * G4, w3 = w0 - l3 + 3.0 * G4;
+        const x4 = x0 - 1.0 + 4.0 * G4, y4 = y0 - 1.0 + 4.0 * G4, z4 = z0 - 1.0 + 4.0 * G4, w4 = w0 - 1.0 + 4.0 * G4;
         const perm = this.perm;
         const ii = i & 255, jj = j & 255, kk = k & 255, ll = l & 255;
         const gi0 = perm[ii + perm[jj + perm[kk + perm[ll]]]] & 31;
@@ -1359,18 +1425,19 @@ class NoiseGenerator {
         const gi3 = perm[ii + i3 + perm[jj + j3 + perm[kk + k3 + perm[ll + l3]]]] & 31;
         const gi4 = perm[ii + 1 + perm[jj + 1 + perm[kk + 1 + perm[ll + 1]]]] & 31;
         let n0 = 0, n1 = 0, n2 = 0, n3 = 0, n4 = 0;
-        let t0 = 0.6 - x0*x0 - y0*y0 - z0*z0 - w0*w0;
-        if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad4[gi0][0]*x0 + grad4[gi0][1]*y0 + grad4[gi0][2]*z0 + grad4[gi0][3]*w0); }
-        let t1 = 0.6 - x1*x1 - y1*y1 - z1*z1 - w1*w1;
-        if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad4[gi1][0]*x1 + grad4[gi1][1]*y1 + grad4[gi1][2]*z1 + grad4[gi1][3]*w1); }
-        let t2 = 0.6 - x2*x2 - y2*y2 - z2*z2 - w2*w2;
-        if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad4[gi2][0]*x2 + grad4[gi2][1]*y2 + grad4[gi2][2]*z2 + grad4[gi2][3]*w2); }
-        let t3 = 0.6 - x3*x3 - y3*y3 - z3*z3 - w3*w3;
-        if (t3 > 0) { t3 *= t3; n3 = t3 * t3 * (grad4[gi3][0]*x3 + grad4[gi3][1]*y3 + grad4[gi3][2]*z3 + grad4[gi3][3]*w3); }
-        let t4 = 0.6 - x4*x4 - y4*y4 - z4*z4 - w4*w4;
-        if (t4 > 0) { t4 *= t4; n4 = t4 * t4 * (grad4[gi4][0]*x4 + grad4[gi4][1]*y4 + grad4[gi4][2]*z4 + grad4[gi4][3]*w4); }
+        let t0 = 0.6 - x0 * x0 - y0 * y0 - z0 * z0 - w0 * w0;
+        if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad4[gi0][0] * x0 + grad4[gi0][1] * y0 + grad4[gi0][2] * z0 + grad4[gi0][3] * w0); }
+        let t1 = 0.6 - x1 * x1 - y1 * y1 - z1 * z1 - w1 * w1;
+        if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad4[gi1][0] * x1 + grad4[gi1][1] * y1 + grad4[gi1][2] * z1 + grad4[gi1][3] * w1); }
+        let t2 = 0.6 - x2 * x2 - y2 * y2 - z2 * z2 - w2 * w2;
+        if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad4[gi2][0] * x2 + grad4[gi2][1] * y2 + grad4[gi2][2] * z2 + grad4[gi2][3] * w2); }
+        let t3 = 0.6 - x3 * x3 - y3 * y3 - z3 * z3 - w3 * w3;
+        if (t3 > 0) { t3 *= t3; n3 = t3 * t3 * (grad4[gi3][0] * x3 + grad4[gi3][1] * y3 + grad4[gi3][2] * z3 + grad4[gi3][3] * w3); }
+        let t4 = 0.6 - x4 * x4 - y4 * y4 - z4 * z4 - w4 * w4;
+        if (t4 > 0) { t4 *= t4; n4 = t4 * t4 * (grad4[gi4][0] * x4 + grad4[gi4][1] * y4 + grad4[gi4][2] * z4 + grad4[gi4][3] * w4); }
         return 27.0 * (n0 + n1 + n2 + n3 + n4);
     }
+
     value(x, y) {
         const xi = Math.floor(x), yi = Math.floor(y);
         const X = xi & 255, Y = yi & 255;
@@ -1383,6 +1450,7 @@ class NoiseGenerator {
         const n11 = perm[X + 1 + perm[Y + 1]] / 255;
         return (lerp(lerp(n00, n10, u), lerp(n01, n11, u), v) * 2) - 1;
     }
+
     value4d(x, y, z, w) {
         const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), wi = Math.floor(w);
         const X = xi & 255, Y = yi & 255, Z = zi & 255, W = wi & 255;
@@ -1410,12 +1478,17 @@ class NoiseGenerator {
         const z0 = lerp(y00, y10, t), z1 = lerp(y01, y11, t);
         return lerp(z0, z1, s) * 2 - 1;
     }
+
     computeDistance(dx, dy, metric) {
         if (metric === 'manhattan') return (Math.abs(dx) + Math.abs(dy)) * 0.75;
         if (metric === 'chebyshev') return Math.max(Math.abs(dx), Math.abs(dy));
-        if (metric === 'minkowski') { const s = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy)); return (s * s) * 0.5; }
+        if (metric === 'minkowski') {
+            const s = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy));
+            return (s * s) * 0.5;
+        }
         return Math.sqrt(dx * dx + dy * dy);
     }
+
     formatWorleyOutput(minDist, secondMinDist, type) {
         let val;
         if (type === 'f1') val = (minDist * 2.0) - 1.0;
@@ -1424,13 +1497,14 @@ class NoiseGenerator {
         else val = ((secondMinDist - minDist) * 2.8) - 1.0;
         return Math.max(-1, Math.min(1, val));
     }
+
     worley(x, y, type, metric) {
-        const xInt = Math.floor(x); const yInt = Math.floor(y);
-        const xFrac = x - xInt; const yFrac = y - yInt;
+        const xInt = Math.floor(x), yInt = Math.floor(y);
+        const xFrac = x - xInt, yFrac = y - yInt;
         let minDist = 100, secondMinDist = 100;
         for (let yNeighbor = -2; yNeighbor <= 2; yNeighbor++) {
             for (let xNeighbor = -2; xNeighbor <= 2; xNeighbor++) {
-                const neighborX = xInt + xNeighbor; const neighborY = yInt + yNeighbor;
+                const neighborX = xInt + xNeighbor, neighborY = yInt + yNeighbor;
                 const pointX = xNeighbor + this.cellHash(neighborX, neighborY, 1);
                 const pointY = yNeighbor + this.cellHash(neighborX, neighborY, 2);
                 const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
@@ -1440,13 +1514,14 @@ class NoiseGenerator {
         }
         return this.formatWorleyOutput(minDist, secondMinDist, type);
     }
+
     worleySeamless(xScaled, yScaled, periodX, periodY, type, metric) {
-        const xInt = Math.floor(xScaled); const yInt = Math.floor(yScaled);
-        const xFrac = xScaled - xInt; const yFrac = yScaled - yInt;
+        const xInt = Math.floor(xScaled), yInt = Math.floor(yScaled);
+        const xFrac = xScaled - xInt, yFrac = yScaled - yInt;
         let minDist = 100, secondMinDist = 100;
         for (let yNeighbor = -2; yNeighbor <= 2; yNeighbor++) {
             for (let xNeighbor = -2; xNeighbor <= 2; xNeighbor++) {
-                const neighborX = xInt + xNeighbor; const neighborY = yInt + yNeighbor;
+                const neighborX = xInt + xNeighbor, neighborY = yInt + yNeighbor;
                 const wrappedX = ((neighborX % periodX) + periodX) % periodX;
                 const wrappedY = ((neighborY % periodY) + periodY) % periodY;
                 const pointX = xNeighbor + this.cellHash(wrappedX, wrappedY, 1);
@@ -1458,6 +1533,7 @@ class NoiseGenerator {
         }
         return this.formatWorleyOutput(minDist, secondMinDist, type);
     }
+
     brickPattern(u, v, cols, rows, detailNoise) {
         const c = Math.max(1, Math.round(cols));
         const r = Math.max(2, Math.round(rows / 2) * 2);
@@ -1517,6 +1593,7 @@ function createGradientLUT(gradientStops, lutSize = 1024) {
         }
         return lut;
     }
+
     const firstColor = hexToRgb(stops[0].color);
     const lastColor = hexToRgb(stops[stops.length - 1].color);
 
@@ -1529,11 +1606,12 @@ function createGradientLUT(gradientStops, lutSize = 1024) {
             rgb = lastColor;
         } else {
             for (let s = 0; s < stops.length - 1; s++) {
-                const s1 = stops[s]; const s2 = stops[s + 1];
+                const s1 = stops[s], s2 = stops[s + 1];
                 if (t >= s1.pos && t <= s2.pos) {
                     const span = s2.pos - s1.pos;
-                    const localT = span > 0.00001 ? (t - s1.pos) / span : 0;
-                    const c1 = hexToRgb(s1.color); const c2 = hexToRgb(s2.color);
+                    const rawT = span > 0.00001 ? (t - s1.pos) / span : 0;
+                    const localT = 0.65 * rawT + 0.35 * hermite(rawT);
+                    const c1 = hexToRgb(s1.color), c2 = hexToRgb(s2.color);
                     rgb = [
                         Math.round(c1[0] + localT * (c2[0] - c1[0])),
                         Math.round(c1[1] + localT * (c2[1] - c1[1])),
@@ -1603,10 +1681,10 @@ function renderNoiseChunk(params) {
                     const tnz = Math.cos(twoPi * v) * turbRy;
                     const tnw = Math.sin(twoPi * v) * turbRy;
                     wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
-                    wy = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
+                    wy = turbGen.simplex4d(tnx + 13.7, tny + 29.3, tnz + 41.1, tnw + 53.9);
                 } else {
                     wx = turbGen.simplex2d(x / turbScale, y / turbScale);
-                    wy = turbGen.simplex2d((x + 1000) / turbScale, (y + 1000) / turbScale);
+                    wy = turbGen.simplex2d((x + 521.3) / turbScale, (y + 863.7) / turbScale);
                 }
                 nx += wx * turbStrength;
                 ny += wy * turbStrength;
@@ -1624,20 +1702,27 @@ function renderNoiseChunk(params) {
                 const tw = Math.sin(twoPi * v) * Ry;
 
                 if (noiseType === 'simplex' || noiseType === 'perlin' || noiseType === 'value') {
-                    let amplitude = 1, freq = 1;
+                    let amplitude = 1, freq = 1, ridgeWeight = 1.0;
                     for (let o = 0; o < octaves; o++) {
+                        const off = OCTAVE_OFFSETS_4D[o & 15];
+                        const ox = tx * freq + off[0], oy = ty * freq + off[1], oz = tz * freq + off[2], ow = tw * freq + off[3];
                         let n;
-                        if (noiseType === 'simplex') n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                        else if (noiseType === 'perlin') n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                        else n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        if (noiseType === 'simplex') n = noiseGen.simplex4d(ox, oy, oz, ow);
+                        else if (noiseType === 'perlin') n = noiseGen.perlin4d(ox, oy, oz, ow);
+                        else n = noiseGen.value4d(ox, oy, oz, ow);
+                        if (ridged) {
+                            n = 1.0 - Math.abs(n);
+                            n = n * n * ridgeWeight;
+                            ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                        }
                         noiseValue += n * amplitude; maxValue += amplitude;
                         amplitude *= persistence; freq *= lacunarity;
                     }
                 } else if (noiseType === 'waves') {
                     let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq) * amplitude;
+                        const off = OCTAVE_OFFSETS_4D[o & 15];
+                        fbm += noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]) * amplitude;
                         fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
                     }
                     if (fbmMax > 0) fbm /= fbmMax;
@@ -1649,9 +1734,10 @@ function renderNoiseChunk(params) {
                 } else if (noiseType === 'caustics') {
                     let amplitude = 1, freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq));
-                        const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq, (tw + 3.7) * freq, (tx - 2.3) * freq, (ty - 2.3) * freq));
-                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
+                        const off = OCTAVE_OFFSETS_4D[o & 15];
+                        const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]));
+                        const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq + off[2], (tw + 3.7) * freq + off[3], (tx - 2.3) * freq + off[0], (ty - 2.3) * freq + off[1]));
+                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
                         if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                         noiseValue += n * amplitude; maxValue += amplitude;
                         amplitude *= persistence; freq *= lacunarity;
@@ -1659,7 +1745,8 @@ function renderNoiseChunk(params) {
                 } else if (noiseType === 'brick') {
                     let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex4d(tx * freq * 2, ty * freq * 2, tz * freq * 2, tw * freq * 2) * amplitude;
+                        const off = OCTAVE_OFFSETS_4D[o & 15];
+                        fbm += noiseGen.simplex4d(tx * freq * 2 + off[0], ty * freq * 2 + off[1], tz * freq * 2 + off[2], tw * freq * 2 + off[3]) * amplitude;
                         fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
                     }
                     if (fbmMax > 0) fbm /= fbmMax;
@@ -1684,31 +1771,39 @@ function renderNoiseChunk(params) {
             } else {
                 const baseSx = nx / scale;
                 const baseSy = ny / scale;
+
                 if (noiseType === 'waves') {
-                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    let fbm = 0, fbmMax = 0, amplitude = 1;
+                    let rx = baseSx, ry = baseSy;
                     for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex2d(baseSx * freq, baseSy * freq) * amplitude;
-                        fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
+                        fbm += noiseGen.simplex2d(rx + o * 17.3, ry + o * 29.7) * amplitude;
+                        fbmMax += amplitude; amplitude *= persistence;
+                        const nrx = (rx * ROT2_COS - ry * ROT2_SIN) * lacunarity;
+                        const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
+                        rx = nrx; ry = nry;
                     }
                     if (fbmMax > 0) fbm /= fbmMax;
                     let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
                     if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                     noiseValue = n; maxValue = 1;
                 } else if (noiseType === 'caustics') {
-                    let amplitude = 1, freq = 1;
+                    let amplitude = 1;
+                    let rx = baseSx, ry = baseSy;
                     for (let o = 0; o < octaves; o++) {
-                        const sx = baseSx * freq; const sy = baseSy * freq;
-                        const n1 = 1.0 - Math.abs(noiseGen.simplex2d(sx, sy));
-                        const n2 = 1.0 - Math.abs(noiseGen.simplex2d(sy + 17.3, sx - 11.7));
-                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
+                        const n1 = 1.0 - Math.abs(noiseGen.simplex2d(rx + o * 13.1, ry + o * 23.7));
+                        const n2 = 1.0 - Math.abs(noiseGen.simplex2d(ry + 17.3, rx - 11.7));
+                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
                         if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                         noiseValue += n * amplitude; maxValue += amplitude;
-                        amplitude *= persistence; freq *= lacunarity;
+                        amplitude *= persistence;
+                        const nrx = (rx * ROT2_COS - ry * ROT2_SIN) * lacunarity;
+                        const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
+                        rx = nrx; ry = nry;
                     }
                 } else if (noiseType === 'brick') {
                     let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex2d(baseSx * freq * 2, baseSy * freq * 2) * amplitude;
+                        fbm += noiseGen.simplex2d(baseSx * freq * 2 + o * 17.3, baseSy * freq * 2 + o * 29.7) * amplitude;
                         fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
                     }
                     if (fbmMax > 0) fbm /= fbmMax;
@@ -1718,24 +1813,33 @@ function renderNoiseChunk(params) {
                     if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                     noiseValue = n; maxValue = 1;
                 } else {
-                    let amplitude = 1, freq = 1;
+                    let amplitude = 1;
+                    let rx = baseSx, ry = baseSy;
+                    let ridgeWeight = 1.0;
                     for (let o = 0; o < octaves; o++) {
-                        const sx = baseSx * freq;
-                        const sy = baseSy * freq;
+                        const sx = rx + o * 17.31;
+                        const sy = ry + o * 29.47;
                         let n;
                         if (noiseType === 'simplex') n = noiseGen.simplex2d(sx, sy);
                         else if (noiseType === 'perlin') n = noiseGen.perlin(sx, sy);
                         else if (noiseType === 'value') n = noiseGen.value(sx, sy);
                         else n = noiseGen.worley(sx, sy, worleyType, worleyDist);
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        if (ridged) {
+                            n = 1.0 - Math.abs(n);
+                            n = n * n * ridgeWeight;
+                            ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                        }
                         noiseValue += n * amplitude; maxValue += amplitude;
-                        amplitude *= persistence; freq *= lacunarity;
+                        amplitude *= persistence;
+                        const nrx = (rx * ROT2_COS - ry * ROT2_SIN) * lacunarity;
+                        const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
+                        rx = nrx; ry = nry;
                     }
                 }
             }
 
             if (maxValue > 0) {
-                noiseValue = ridged ? (noiseValue / maxValue) : ((noiseValue / maxValue + 1.0) * 0.5);
+                noiseValue = ridged ? Math.min(1.0, (noiseValue / maxValue) * 1.25) : ((noiseValue / maxValue + 1.0) * 0.5);
             } else {
                 noiseValue = 0.5;
             }
@@ -2014,7 +2118,6 @@ class ThreeController {
             const domeMat = new THREE.MeshBasicMaterial({ color: 0x1c2230, side: THREE.BackSide });
             envScene.add(new THREE.Mesh(domeGeo, domeMat));
 
-            // Studio softboxes for realistic specular/metallic reflections
             const panelGeo = new THREE.PlaneGeometry(10, 10);
             const topLight = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
             topLight.position.set(0, 12, 0);
@@ -2058,7 +2161,6 @@ class ThreeController {
         faces.forEach(face => {
             const n = subdivisions;
             if (face.type === 'quad') {
-                // CCW quad: v00 (bottom-left), v10 (bottom-right), v11 (top-right), v01 (top-left)
                 const { v00, v10, v11, v01, uv00, uv10, uv11, uv01 } = face;
                 for (let j = 0; j < n; j++) {
                     const ty0 = j / n, ty1 = (j + 1) / n;
@@ -2077,7 +2179,6 @@ class ThreeController {
                     }
                 }
             } else if (face.type === 'tri') {
-                // CCW triangle: v0, v1, v2
                 const { v0, v1, v2, uv0, uv1, uv2 } = face;
                 const gridP = [];
                 const gridUV = [];
@@ -2134,29 +2235,19 @@ class ThreeController {
 
         // Properly wound (CCW outward) & subdivided Wedge geometry
         this.geometries.wedge = this.buildSubdividedMesh([
-            // Slope face (+Y/+Z normal)
             { type: 'quad', v00: [-0.5, -0.5, 0.5], v10: [0.5, -0.5, 0.5], v11: [0.5, 0.5, -0.5], v01: [-0.5, 0.5, -0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            // Back face (-Z normal)
             { type: 'quad', v00: [0.5, -0.5, -0.5], v10: [-0.5, -0.5, -0.5], v11: [-0.5, 0.5, -0.5], v01: [0.5, 0.5, -0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            // Bottom face (-Y normal)
             { type: 'quad', v00: [-0.5, -0.5, -0.5], v10: [0.5, -0.5, -0.5], v11: [0.5, -0.5, 0.5], v01: [-0.5, -0.5, 0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            // Left face (-X normal)
             { type: 'tri', v0: [-0.5, -0.5, -0.5], v1: [-0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
-            // Right face (+X normal)
             { type: 'tri', v0: [0.5, -0.5, 0.5], v1: [0.5, -0.5, -0.5], v2: [0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [1, 1] }
         ], 20);
 
-        // Properly wound (CCW outward) & subdivided Corner Wedge geometry (square base + apex at [-0.5, 0.5, -0.5])
+        // Properly wound (CCW outward) & subdivided Corner Wedge geometry
         this.geometries.cornerWedge = this.buildSubdividedMesh([
-            // Bottom face (-Y normal)
             { type: 'quad', v00: [-0.5, -0.5, -0.5], v10: [0.5, -0.5, -0.5], v11: [0.5, -0.5, 0.5], v01: [-0.5, -0.5, 0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            // Back vertical triangle (-Z normal)
             { type: 'tri', v0: [0.5, -0.5, -0.5], v1: [-0.5, -0.5, -0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [1, 1] },
-            // Left vertical triangle (-X normal)
             { type: 'tri', v0: [-0.5, -0.5, -0.5], v1: [-0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
-            // Front sloped triangle (+Z/+Y normal)
             { type: 'tri', v0: [-0.5, -0.5, 0.5], v1: [0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
-            // Right sloped triangle (+X/+Y normal)
             { type: 'tri', v0: [0.5, -0.5, 0.5], v1: [0.5, -0.5, -0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] }
         ], 20);
 
@@ -2221,7 +2312,6 @@ class ThreeController {
 
         const isLit = this.currentChannel === 'lit';
         if (!isLit) {
-            // Flat / unlit inspection mode so individual PBR channels aren't darkened by metalness or colored lights
             this.material.roughness = 1.0;
             this.material.metalness = 0.0;
             this.material.envMapIntensity = 0.0;
@@ -2245,7 +2335,6 @@ class ThreeController {
         const baseRough = numOrDefault(document.getElementById('matRoughness').value, 0.6);
         const baseMetal = numOrDefault(document.getElementById('matMetalness').value, 0.1);
 
-        // Roughness & Metallic maps already encode baseRough & baseMetal; set scalar multiplier to 1.0 when map is active
         this.material.roughness = this.material.roughnessMap ? 1.0 : baseRough;
         this.material.metalness = this.material.metalnessMap ? 1.0 : baseMetal;
 
@@ -2348,7 +2437,7 @@ class ThreeController {
     }
 }
 
-// --- 4. APP STATE & INITIALIZATION ---
+// --- 4. APP STATE, UNDO/REDO HISTORY & INITIALIZATION ---
 const state = {
     canvas: null,
     diffuseCanvas: null,
@@ -2360,7 +2449,12 @@ const state = {
     inputs: {},
     uploadedImage: null,
     currentViewMap: 'diffuse',
+    tile2dPreview: false,
     rawHeights: null,
+    curvatureMap: null,
+    history: [],
+    historyIndex: -1,
+    isRestoringHistory: false,
     gradientStops: [
         { pos: 0.0, color: "#1a0500" },
         { pos: 0.25, color: "#7a1200" },
@@ -2377,6 +2471,77 @@ let isRendering = false;
 let currentRenderId = 0;
 let proxyCanvas = null;
 let proxyCtx = null;
+
+function captureCurrentConfigSnapshot() {
+    return {
+        texWidth: numOrDefault(state.inputs.texWidth?.value, 256),
+        texHeight: numOrDefault(state.inputs.texHeight?.value, 256),
+        seed: numOrDefault(state.inputs.seed?.value, 12345),
+        noiseType: state.inputs.noiseType?.value || 'perlin',
+        scale: numOrDefault(state.inputs.scale?.value, 50),
+        octaves: numOrDefault(state.inputs.octaves?.value, 4),
+        persistence: numOrDefault(state.inputs.persistence?.value, 0.5),
+        lacunarity: numOrDefault(state.inputs.lacunarity?.value, 2.0),
+        ridged: Boolean(state.inputs.ridged?.checked),
+        turbStrength: numOrDefault(state.inputs.turbStrength?.value, 0),
+        turbScale: numOrDefault(state.inputs.turbScale?.value, 50),
+        worleyType: state.inputs.worleyType?.value || 'f1',
+        worleyDist: state.inputs.worleyDist?.value || 'euclidean',
+        contrast: numOrDefault(state.inputs.contrast?.value, 1.0),
+        brightness: numOrDefault(state.inputs.brightness?.value, 0.0),
+        invert: Boolean(state.inputs.invert?.checked),
+        thresholdEnable: Boolean(state.inputs.thresholdEnable?.checked),
+        threshold: numOrDefault(state.inputs.threshold?.value, 0.5),
+        bumpScale: numOrDefault(state.inputs.bumpScale?.value, 0.3),
+        displacementScale: numOrDefault(state.inputs.displacementScale?.value, 0.05),
+        matRoughness: numOrDefault(state.inputs.matRoughness?.value, 0.6),
+        matMetalness: numOrDefault(state.inputs.matMetalness?.value, 0.1),
+        aoIntensity: numOrDefault(state.inputs.aoIntensity?.value, 1.0),
+        normalStrength: numOrDefault(state.inputs.normalStrength?.value, 3.0),
+        directXNormalCheckbox: Boolean(state.inputs.directXNormalCheckbox?.checked),
+        seamlessTilingCheckbox: Boolean(state.inputs.seamlessTilingCheckbox?.checked),
+        stops: JSON.parse(JSON.stringify(state.gradientStops))
+    };
+}
+
+function pushHistorySnapshot() {
+    if (state.isRestoringHistory) return;
+    const snap = captureCurrentConfigSnapshot();
+    const serialized = JSON.stringify(snap);
+    if (state.historyIndex >= 0 && JSON.stringify(state.history[state.historyIndex]) === serialized) {
+        return;
+    }
+    state.history = state.history.slice(0, state.historyIndex + 1);
+    state.history.push(snap);
+    if (state.history.length > 40) state.history.shift();
+    state.historyIndex = state.history.length - 1;
+    updateHistoryButtons();
+}
+
+function updateHistoryButtons() {
+    const undoBtn = document.getElementById('undoBtn');
+    const redoBtn = document.getElementById('redoBtn');
+    if (undoBtn) undoBtn.disabled = state.historyIndex <= 0;
+    if (redoBtn) redoBtn.disabled = state.historyIndex >= state.history.length - 1;
+}
+
+function undoState() {
+    if (state.historyIndex <= 0) return;
+    state.historyIndex--;
+    state.isRestoringHistory = true;
+    applyStateToUI(state.history[state.historyIndex]);
+    state.isRestoringHistory = false;
+    updateHistoryButtons();
+}
+
+function redoState() {
+    if (state.historyIndex >= state.history.length - 1) return;
+    state.historyIndex++;
+    state.isRestoringHistory = true;
+    applyStateToUI(state.history[state.historyIndex]);
+    state.isRestoringHistory = false;
+    updateHistoryButtons();
+}
 
 function init() {
     state.canvas = document.getElementById('textureCanvas');
@@ -2448,6 +2613,10 @@ function init() {
                 debouncedGenerate();
             }
         });
+
+        el.addEventListener('change', () => {
+            pushHistorySnapshot();
+        });
     });
 
     // Resolution Presets
@@ -2471,13 +2640,22 @@ function init() {
         generateTexture();
     });
 
+    // Undo / Redo handlers
+    document.getElementById('undoBtn').addEventListener('click', undoState);
+    document.getElementById('redoBtn').addEventListener('click', redoState);
+
     // Image upload handlers
     document.getElementById('imageInput').addEventListener('change', handleImageUpload);
     document.getElementById('clearImageBtn').addEventListener('click', clearImageUpload);
 
-    // Downloads
+    // Downloads & 2D Seam View Toggle
     document.getElementById('downloadCurrentBtn').addEventListener('click', downloadCurrentViewMap);
     document.getElementById('downloadAllPbrBtn').addEventListener('click', downloadAllPbrMaps);
+    document.getElementById('tile2dToggleBtn').addEventListener('click', (e) => {
+        state.tile2dPreview = !state.tile2dPreview;
+        e.currentTarget.classList.toggle('active-toggle', state.tile2dPreview);
+        render2DCanvasView();
+    });
 
     // Preset import & export
     document.getElementById('exportPresetBtn').addEventListener('click', exportPresetJSON);
@@ -2572,8 +2750,22 @@ function init() {
         });
     });
 
-    // Keyboard shortcuts
+    // Keyboard shortcuts (including Ctrl+Z / Ctrl+Y)
     window.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.code === 'KeyZ') {
+            if (!['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                undoState();
+                return;
+            }
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.code === 'KeyY' || (e.shiftKey && e.code === 'KeyZ'))) {
+            if (!['INPUT', 'TEXTAREA'].includes(document.activeElement.tagName)) {
+                e.preventDefault();
+                redoState();
+                return;
+            }
+        }
         if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(document.activeElement.tagName)) return;
         if (e.code === 'KeyR') {
             randomizeAll();
@@ -2635,7 +2827,6 @@ function applySeamlessEdgeBlend(sourceCanvas) {
     const blendW = Math.max(2, Math.floor(w * 0.18));
     const blendH = Math.max(2, Math.floor(h * 0.18));
 
-    // Symmetric horizontal opposite-edge blend: both edges meet at 0.5*(L+R) at the seam with C1 continuity
     for (let y = 0; y < h; y++) {
         for (let x = 0; x < blendW; x++) {
             const t = (x + 0.5) / blendW;
@@ -2654,7 +2845,6 @@ function applySeamlessEdgeBlend(sourceCanvas) {
     }
 
     const hPassCopy = new Uint8ClampedArray(src);
-    // Symmetric vertical opposite-edge blend
     for (let x = 0; x < w; x++) {
         for (let y = 0; y < blendH; y++) {
             const t = (y + 0.5) / blendH;
@@ -2685,7 +2875,8 @@ function sampleColorAtPos(t) {
     for (let i = 0; i < sorted.length - 1; i++) {
         if (t >= sorted[i].pos && t <= sorted[i + 1].pos) {
             const range = sorted[i + 1].pos - sorted[i].pos;
-            const localT = range > 0.00001 ? (t - sorted[i].pos) / range : 0;
+            const rawT = range > 0.00001 ? (t - sorted[i].pos) / range : 0;
+            const localT = 0.65 * rawT + 0.35 * (rawT * rawT * (3.0 - 2.0 * rawT));
             const c1 = hexToRgb(sorted[i].color);
             const c2 = hexToRgb(sorted[i + 1].color);
             return rgbToHex(
@@ -2922,8 +3113,8 @@ function updateGradientPreview() {
     document.getElementById('gradient-preview').style.background = `linear-gradient(to right, ${css})`;
 }
 
-// --- 7. MODULAR 6-CHANNEL PBR MAP FILTERS ---
-function ensureHeightArray() {
+// --- 7. MODULAR 6-CHANNEL PBR MAP FILTERS (SCHARR + 8-TAP CURVATURE & HORIZON AO) ---
+function ensureHeightAndCurvatureArrays() {
     const w = state.diffuseCanvas.width;
     const h = state.diffuseCanvas.height;
     if (w * h === 0) return null;
@@ -2938,13 +3129,31 @@ function ensureHeightArray() {
         }
         state.rawHeights = heightArr;
     }
+
+    // Compute 8-neighbor isotropic Laplacian mean curvature map (positive = convex ridge/peak, negative = concave crevice)
+    const seamless = document.getElementById('seamlessTilingCheckbox').checked;
+    const curvArr = new Float32Array(w * h);
+    for (let y = 0; y < h; y++) {
+        const ym1 = seamless ? (y === 0 ? h - 1 : y - 1) : Math.max(0, y - 1);
+        const yp1 = seamless ? (y === h - 1 ? 0 : y + 1) : Math.min(h - 1, y + 1);
+        for (let x = 0; x < w; x++) {
+            const xm1 = seamless ? (x === 0 ? w - 1 : x - 1) : Math.max(0, x - 1);
+            const xp1 = seamless ? (x === w - 1 ? 0 : x + 1) : Math.min(w - 1, x + 1);
+
+            const c = heightArr[y * w + x];
+            const axial = (heightArr[ym1 * w + x] + heightArr[yp1 * w + x] + heightArr[y * w + xm1] + heightArr[y * w + xp1]) * 0.2;
+            const diag = (heightArr[ym1 * w + xm1] + heightArr[ym1 * w + xp1] + heightArr[yp1 * w + xm1] + heightArr[yp1 * w + xp1]) * 0.05;
+            curvArr[y * w + x] = Math.max(-1, Math.min(1, (c - (axial + diag)) * 6.0));
+        }
+    }
+    state.curvatureMap = curvArr;
     return heightArr;
 }
 
 function generateHeightMap() {
     const w = state.diffuseCanvas.width;
     const h = state.diffuseCanvas.height;
-    const heightArr = ensureHeightArray();
+    const heightArr = ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
 
     const heightCanvas = state.heightCanvas || document.createElement('canvas');
@@ -2969,7 +3178,7 @@ function generateHeightMap() {
 function generateNormalMap() {
     const w = state.diffuseCanvas.width;
     const h = state.diffuseCanvas.height;
-    const heightArr = ensureHeightArray();
+    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
 
     const normalCanvas = state.normalCanvas || document.createElement('canvas');
@@ -2983,6 +3192,7 @@ function generateNormalMap() {
     const directX = document.getElementById('directXNormalCheckbox').checked;
     const seamless = document.getElementById('seamlessTilingCheckbox').checked;
 
+    // Rotational-symmetry-optimized 3x3 Scharr operator ([3, 10, 3] / 4 = [0.75, 2.5, 0.75] normalized to match Sobel magnitude)
     for (let y = 0; y < h; y++) {
         const ym1 = seamless ? (y === 0 ? h - 1 : y - 1) : Math.max(0, y - 1);
         const yp1 = seamless ? (y === h - 1 ? 0 : y + 1) : Math.min(h - 1, y + 1);
@@ -3000,8 +3210,8 @@ function generateNormalMap() {
             const l12 = heightArr[yp1 * w + x];
             const l22 = heightArr[yp1 * w + xp1];
 
-            const dX = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
-            const dY = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
+            const dX = (0.75 * l20 + 2.5 * l21 + 0.75 * l22) - (0.75 * l00 + 2.5 * l01 + 0.75 * l02);
+            const dY = (0.75 * l02 + 2.5 * l12 + 0.75 * l22) - (0.75 * l00 + 2.5 * l10 + 0.75 * l20);
 
             const nx = -dX * strength;
             const ny = directX ? (dY * strength) : (-dY * strength);
@@ -3022,8 +3232,9 @@ function generateNormalMap() {
 function generateRoughnessMap() {
     const w = state.diffuseCanvas.width;
     const h = state.diffuseCanvas.height;
-    const heightArr = ensureHeightArray();
+    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
+    const curvArr = state.curvatureMap;
 
     const roughnessCanvas = state.roughnessCanvas || document.createElement('canvas');
     roughnessCanvas.width = w;
@@ -3033,11 +3244,12 @@ function generateRoughnessMap() {
     const rDst = rImgData.data;
 
     const baseRough = numOrDefault(document.getElementById('matRoughness').value, 0.6);
-    // Modulate micro-roughness around baseRough: crevices are slightly rougher, peaks are slightly more polished
-    const modSpan = 0.32 * (1.0 - Math.abs(2.0 * baseRough - 1.0) * 0.65);
+    const modSpan = 0.34 * (1.0 - Math.abs(2.0 * baseRough - 1.0) * 0.65);
 
     for (let i = 0; i < w * h; i++) {
-        const microVar = (0.5 - heightArr[i]) * modSpan;
+        // Combine elevation & mean curvature: concave crevices trap dust (rougher), convex peaks polish (smoother)
+        const curv = curvArr ? curvArr[i] : 0;
+        const microVar = ((0.5 - heightArr[i]) * 0.75 - curv * 0.25) * modSpan;
         const roughVal = Math.max(0, Math.min(255, Math.round((baseRough + microVar) * 255)));
         const idx = i * 4;
         rDst[idx]     = roughVal;
@@ -3052,8 +3264,9 @@ function generateRoughnessMap() {
 function generateMetallicMap() {
     const w = state.diffuseCanvas.width;
     const h = state.diffuseCanvas.height;
-    const heightArr = ensureHeightArray();
+    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
+    const curvArr = state.curvatureMap;
 
     const metallicCanvas = state.metallicCanvas || document.createElement('canvas');
     metallicCanvas.width = w;
@@ -3063,11 +3276,12 @@ function generateMetallicMap() {
     const mDst = mImgData.data;
 
     const baseMetal = numOrDefault(document.getElementById('matMetalness').value, 0.1);
-    const modSpan = baseMetal > 0.02 ? 0.25 * (1.0 - Math.abs(2.0 * baseMetal - 1.0) * 0.6) : 0.0;
+    const modSpan = baseMetal > 0.02 ? 0.28 * (1.0 - Math.abs(2.0 * baseMetal - 1.0) * 0.6) : 0.0;
 
     for (let i = 0; i < w * h; i++) {
-        // Raised ridges exhibit slightly higher metallic sheen than recessed crevices
-        const edgeWear = (heightArr[i] - 0.5) * modSpan;
+        // Raised ridges & convex edges exhibit higher metallic sheen than recessed crevices
+        const curv = curvArr ? curvArr[i] : 0;
+        const edgeWear = ((heightArr[i] - 0.5) * 0.7 + curv * 0.3) * modSpan;
         const metalVal = Math.max(0, Math.min(255, Math.round((baseMetal + edgeWear) * 255)));
         const idx = i * 4;
         mDst[idx]     = metalVal;
@@ -3082,7 +3296,7 @@ function generateMetallicMap() {
 function generateAoMap() {
     const w = state.diffuseCanvas.width;
     const h = state.diffuseCanvas.height;
-    const heightArr = ensureHeightArray();
+    const heightArr = state.rawHeights || ensureHeightAndCurvatureArrays();
     if (!heightArr) return;
 
     const aoCanvas = state.aoCanvas || document.createElement('canvas');
@@ -3104,6 +3318,10 @@ function generateAoMap() {
         return Math.max(0, Math.min(max - 1, coord));
     };
 
+    // 8-direction isotropic multi-scale horizon/cavity occlusion (4 axial + 4 diagonal weighted by 1/sqrt(2))
+    const invDiag = 0.70710678;
+    const norm8 = 1.0 / (4.0 + 4.0 * invDiag);
+
     for (let y = 0; y < h; y++) {
         const y1m = wrapIdx(y - r1, h), y1p = wrapIdx(y + r1, h);
         const y2m = wrapIdx(y - r2, h), y2p = wrapIdx(y + r2, h);
@@ -3116,9 +3334,20 @@ function generateAoMap() {
 
             const center = heightArr[y * w + x];
 
-            const avg1 = (heightArr[y1m * w + x] + heightArr[y1p * w + x] + heightArr[y * w + x1m] + heightArr[y * w + x1p]) * 0.25;
-            const avg2 = (heightArr[y2m * w + x] + heightArr[y2p * w + x] + heightArr[y * w + x2m] + heightArr[y * w + x2p]) * 0.25;
-            const avg3 = (heightArr[y3m * w + x] + heightArr[y3p * w + x] + heightArr[y * w + x3m] + heightArr[y * w + x3p]) * 0.25;
+            const avg1 = (
+                heightArr[y1m * w + x] + heightArr[y1p * w + x] + heightArr[y * w + x1m] + heightArr[y * w + x1p] +
+                (heightArr[y1m * w + x1m] + heightArr[y1m * w + x1p] + heightArr[y1p * w + x1m] + heightArr[y1p * w + x1p]) * invDiag
+            ) * norm8;
+
+            const avg2 = (
+                heightArr[y2m * w + x] + heightArr[y2p * w + x] + heightArr[y * w + x2m] + heightArr[y * w + x2p] +
+                (heightArr[y2m * w + x2m] + heightArr[y2m * w + x2p] + heightArr[y2p * w + x2m] + heightArr[y2p * w + x2p]) * invDiag
+            ) * norm8;
+
+            const avg3 = (
+                heightArr[y3m * w + x] + heightArr[y3p * w + x] + heightArr[y * w + x3m] + heightArr[y * w + x3p] +
+                (heightArr[y3m * w + x3m] + heightArr[y3m * w + x3p] + heightArr[y3p * w + x3m] + heightArr[y3p * w + x3p]) * invDiag
+            ) * norm8;
 
             const cav1 = Math.max(0, avg1 - center) * 3.2;
             const cav2 = Math.max(0, avg2 - center) * 2.2;
@@ -3164,7 +3393,16 @@ function render2DCanvasView() {
     else if (state.currentViewMap === 'metallic' && state.metallicCanvas) targetSource = state.metallicCanvas;
     else if (state.currentViewMap === 'ao' && state.aoCanvas) targetSource = state.aoCanvas;
 
-    ctx.drawImage(targetSource, 0, 0);
+    if (state.tile2dPreview) {
+        const hw = w / 2;
+        const hh = h / 2;
+        ctx.drawImage(targetSource, 0, 0, hw, hh);
+        ctx.drawImage(targetSource, hw, 0, hw, hh);
+        ctx.drawImage(targetSource, 0, hh, hw, hh);
+        ctx.drawImage(targetSource, hw, hh, hw, hh);
+    } else {
+        ctx.drawImage(targetSource, 0, 0);
+    }
 }
 
 // --- 8. MULTI-THREADED WORKER PIPELINE (WITH AUTOMATIC FALLBACK) ---
@@ -3174,6 +3412,7 @@ function finalizeProceduralRender() {
     if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
     render2DCanvasView();
     document.getElementById('loader').classList.remove('active');
+    pushHistorySnapshot();
 }
 
 function runMainThreadFallback(renderId, w, h, payload) {
@@ -3202,7 +3441,7 @@ function runMainThreadFallback(renderId, w, h, payload) {
 
         const chunkImg = new ImageData(result.data, w, endY - startY);
         diffuseCtx.putImageData(chunkImg, 0, startY);
-        if (state.currentViewMap === 'diffuse') {
+        if (state.currentViewMap === 'diffuse' && !state.tile2dPreview) {
             ctx.putImageData(chunkImg, 0, startY);
         }
         if (result.heightData && state.rawHeights) {
@@ -3227,7 +3466,6 @@ function generateTexture() {
     if (!checkResolutionSupport()) return;
 
     if (isRendering) {
-        // Cancel any in-flight workers cleanly and reset pool
         terminateAllPoolWorkers();
     }
 
@@ -3369,7 +3607,7 @@ function generateTexture() {
 
                 const chunkImg = new ImageData(chunkData, w, localChunkH);
                 diffuseCtx.putImageData(chunkImg, 0, chunkStartY);
-                if (state.currentViewMap === 'diffuse') {
+                if (state.currentViewMap === 'diffuse' && !state.tile2dPreview) {
                     ctx.putImageData(chunkImg, 0, chunkStartY);
                 }
 
@@ -3393,18 +3631,16 @@ function generateTexture() {
             }
         };
 
-        worker.onerror = function(err) {
+        worker.onerror = function() {
             if (renderId !== currentRenderId || fallbackTriggered) return;
             fallbackTriggered = true;
             terminateAllPoolWorkers();
 
-            // If external noiseWorker.js failed (e.g. 404 or CORS), switch to inline Blob Worker & retry immediately
             if (preferExternalWorker) {
                 preferExternalWorker = false;
                 isRendering = false;
                 generateTexture();
             } else {
-                // If Blob Workers also failed (e.g. strict CSP), use main-thread fallback
                 workersSupported = false;
                 runMainThreadFallback(renderId, w, h, payload);
             }
@@ -3607,7 +3843,6 @@ function applyStateToUI(p) {
         stops: [{ pos: 0, color: "#000000" }, { pos: 1, color: "#ffffff" }]
     };
 
-    // Support both legacy and current JSON property names
     const normalized = { ...p };
     if (normalized.directXNormal !== undefined && normalized.directXNormalCheckbox === undefined) {
         normalized.directXNormalCheckbox = normalized.directXNormal;
@@ -3701,34 +3936,8 @@ function randomizeAll() {
 
 function exportPresetJSON() {
     const config = {
-        version: "2.1-pro",
-        texWidth: numOrDefault(state.inputs.texWidth.value, 256),
-        texHeight: numOrDefault(state.inputs.texHeight.value, 256),
-        seed: numOrDefault(state.inputs.seed.value, 12345),
-        noiseType: state.inputs.noiseType.value,
-        scale: numOrDefault(state.inputs.scale.value, 50),
-        octaves: numOrDefault(state.inputs.octaves.value, 4),
-        persistence: numOrDefault(state.inputs.persistence.value, 0.5),
-        lacunarity: numOrDefault(state.inputs.lacunarity.value, 2.0),
-        ridged: state.inputs.ridged.checked,
-        turbStrength: numOrDefault(state.inputs.turbStrength.value, 0),
-        turbScale: numOrDefault(state.inputs.turbScale.value, 50),
-        worleyType: state.inputs.worleyType.value,
-        worleyDist: state.inputs.worleyDist.value,
-        contrast: numOrDefault(state.inputs.contrast.value, 1.0),
-        brightness: numOrDefault(state.inputs.brightness.value, 0.0),
-        invert: state.inputs.invert.checked,
-        thresholdEnable: state.inputs.thresholdEnable.checked,
-        threshold: numOrDefault(state.inputs.threshold.value, 0.5),
-        bumpScale: numOrDefault(state.inputs.bumpScale.value, 0.3),
-        displacementScale: numOrDefault(state.inputs.displacementScale.value, 0.05),
-        matRoughness: numOrDefault(state.inputs.matRoughness.value, 0.6),
-        matMetalness: numOrDefault(state.inputs.matMetalness.value, 0.1),
-        aoIntensity: numOrDefault(state.inputs.aoIntensity.value, 1.0),
-        normalStrength: numOrDefault(state.inputs.normalStrength.value, 3.0),
-        directXNormalCheckbox: state.inputs.directXNormalCheckbox.checked,
-        seamlessTilingCheckbox: state.inputs.seamlessTilingCheckbox.checked,
-        stops: state.gradientStops
+        version: "2.2-pro",
+        ...captureCurrentConfigSnapshot()
     };
 
     const blob = new Blob([JSON.stringify(config, null, 2)], { type: 'application/json' });

@@ -2,7 +2,8 @@
  * Ultimate Texture Generator - Multi-Threaded Procedural Noise Worker
  * Zero external imports, zero DOM API dependencies. Fully standalone & native.
  * Supports: Simplex, Perlin, Value, Worley/Cellular, Sine Waves (Wood/Marble),
- * Optical Caustics, and Procedural Bricks with 2D & 4D Toroidal Seamless Tiling.
+ * Optical Caustics, and Procedural Bricks with 2D & 4D Toroidal Seamless Tiling,
+ * Octave Phase Decorrelation, Pythagorean 2D Octave Rotation, and Musgrave Ridged Multifractals.
  */
 
 // 1. DETERMINISTIC 32-BIT PRNG (Mulberry32)
@@ -32,6 +33,7 @@ class SeededRandom {
 
 const lerp = (a, b, t) => a + t * (b - a);
 const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+const hermite = t => t * t * (3.0 - 2.0 * t);
 
 // 2D & 4D Simplex skew constants
 const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
@@ -39,10 +41,18 @@ const G2 = (3.0 - Math.sqrt(3.0)) / 6.0;
 const F4 = (Math.sqrt(5.0) - 1.0) / 4.0;
 const G4 = (5.0 - Math.sqrt(5.0)) / 20.0;
 
+// Exact Pythagorean 2D rotation (cos = 0.8, sin = 0.6) to decorrelate 2D octave grid axes
+const ROT2_COS = 0.8;
+const ROT2_SIN = 0.6;
+
+// 12-direction 2D unit gradients for high-isotropy 2D Simplex
 const grad2 = [
     [1, 1], [-1, 1], [1, -1], [-1, -1],
     [1, 0], [-1, 0], [0, 1], [0, -1]
-];
+].map(v => {
+    const len = Math.sqrt(v[0] * v[0] + v[1] * v[1]);
+    return [v[0] / len, v[1] / len];
+});
 
 // Symmetric 4D unit gradients
 const grad4 = [
@@ -58,6 +68,14 @@ const grad4 = [
     const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
     return [v[0] / len, v[1] / len, v[2] / len, v[3] / len];
 });
+
+// Deterministic per-octave 4D phase offsets (prevents concentric 4D torus origin alignment)
+const OCTAVE_OFFSETS_4D = Array.from({ length: 16 }, (_, o) => [
+    o * 17.31,
+    o * 29.47,
+    o * 43.19,
+    o * 61.83
+]);
 
 // 2. NOISE GENERATOR ENGINE
 class NoiseGenerator {
@@ -207,7 +225,7 @@ class NoiseGenerator {
         return Math.max(-1, Math.min(1, lerp(z0, z1, s) * 1.45));
     }
 
-    // --- Simplex Noise 2D ---
+    // --- Simplex Noise 2D (with normalized unit gradients) ---
     simplex2d(x, y) {
         const s = (x + y) * F2;
         const i = Math.floor(x + s);
@@ -249,7 +267,7 @@ class NoiseGenerator {
             t2 *= t2;
             n2 = t2 * t2 * (grad2[gi2][0] * x2 + grad2[gi2][1] * y2);
         }
-        return 70.0 * (n0 + n1 + n2);
+        return Math.max(-1, Math.min(1, 99.0 * (n0 + n1 + n2)));
     }
 
     // --- Simplex Noise 4D (for Ultra-Fast Toroidal Seamless Tiling) ---
@@ -473,7 +491,7 @@ class NoiseGenerator {
     }
 }
 
-// 3. COLOR PARSING & GRADIENT LOOKUP TABLE
+// 3. COLOR PARSING & C1-SMOOTH GRADIENT LOOKUP TABLE
 function hexToRgb(hex) {
     if (!hex || typeof hex !== 'string') return [0, 0, 0];
     const clean = hex.trim().replace(/^#/, '');
@@ -529,7 +547,9 @@ function createGradientLUT(gradientStops, lutSize = 1024) {
                 const s2 = stops[s + 1];
                 if (t >= s1.pos && t <= s2.pos) {
                     const span = s2.pos - s1.pos;
-                    const localT = span > 0.00001 ? (t - s1.pos) / span : 0;
+                    const rawT = span > 0.00001 ? (t - s1.pos) / span : 0;
+                    // Blend linear and C1 Hermite interpolation to suppress Mach banding at stop boundaries
+                    const localT = 0.65 * rawT + 0.35 * hermite(rawT);
                     const c1 = hexToRgb(s1.color);
                     const c2 = hexToRgb(s2.color);
                     rgb = [
@@ -559,6 +579,12 @@ function renderNoiseChunk(params) {
         thresholdEnable, seamless, gradientStops
     } = params;
 
+    const vWidth = Math.max(width, numOrDefault(params.virtualWidth, width));
+    const vHeight = Math.max(height, numOrDefault(params.virtualHeight, height));
+    const scaleX = vWidth / width;
+    const scaleY = vHeight / height;
+    const useRGSS = scaleX > 1.001 || scaleY > 1.001;
+
     const seed = parseNumericSeed(params.seed);
     const scale = Math.max(1, numOrDefault(params.scale, 50));
     const octaves = Math.max(1, Math.min(12, Math.round(numOrDefault(params.octaves, 4))));
@@ -581,201 +607,237 @@ function renderNoiseChunk(params) {
     const heightData = new Float32Array(width * chunkHeight);
 
     const twoPi = 2 * Math.PI;
-    // Scale-consistent toroidal radii: arc length 2*pi*R matches width/scale & height/scale
-    const cyclesX = Math.max(0.25, width / scale);
-    const cyclesY = Math.max(0.25, height / scale);
+    // Scale-consistent toroidal radii: arc length 2*pi*R matches vWidth/scale & vHeight/scale
+    const cyclesX = Math.max(0.25, vWidth / scale);
+    const cyclesY = Math.max(0.25, vHeight / scale);
     const Rx = cyclesX / twoPi;
     const Ry = cyclesY / twoPi;
 
-    const turbCyclesX = Math.max(0.25, width / turbScale);
-    const turbCyclesY = Math.max(0.25, height / turbScale);
+    const turbCyclesX = Math.max(0.25, vWidth / turbScale);
+    const turbCyclesY = Math.max(0.25, vHeight / turbScale);
     const turbRx = turbCyclesX / twoPi;
     const turbRy = turbCyclesY / twoPi;
+
+    const brickCols = Math.max(2, Math.round(vWidth / scale));
+    const brickRows = Math.max(4, Math.round((vHeight / scale) * 2));
+    const worleyPeriodX = Math.max(1, Math.round(vWidth / scale));
+    const worleyPeriodY = Math.max(1, Math.round(vHeight / scale));
+    const waveCyclesX = Math.max(1, Math.round(cyclesX));
+    const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
+
+    const evaluatePoint = (vx, vy) => {
+        let u = vx / vWidth;
+        let v = vy / vHeight;
+        let nx = vx;
+        let ny = vy;
+
+        // Turbulence / Domain Warping
+        if (turbStrength > 0) {
+            let wx, wy;
+            if (seamless) {
+                const tnx = Math.cos(twoPi * u) * turbRx;
+                const tny = Math.sin(twoPi * u) * turbRx;
+                const tnz = Math.cos(twoPi * v) * turbRy;
+                const tnw = Math.sin(twoPi * v) * turbRy;
+
+                wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
+                wy = turbGen.simplex4d(tnx + 13.7, tny + 29.3, tnz + 41.1, tnw + 53.9);
+            } else {
+                wx = turbGen.simplex2d(vx / turbScale, vy / turbScale);
+                wy = turbGen.simplex2d((vx + 521.3) / turbScale, (vy + 863.7) / turbScale);
+            }
+            nx += wx * turbStrength;
+            ny += wy * turbStrength;
+            u = nx / vWidth;
+            v = ny / vHeight;
+        }
+
+        let noiseValue = 0;
+        let maxValue = 0;
+
+        if (seamless) {
+            const tx = Math.cos(twoPi * u) * Rx;
+            const ty = Math.sin(twoPi * u) * Rx;
+            const tz = Math.cos(twoPi * v) * Ry;
+            const tw = Math.sin(twoPi * v) * Ry;
+
+            if (noiseType === 'simplex' || noiseType === 'perlin' || noiseType === 'value') {
+                let amplitude = 1;
+                let freq = 1;
+                let ridgeWeight = 1.0;
+                for (let o = 0; o < octaves; o++) {
+                    const off = OCTAVE_OFFSETS_4D[o & 15];
+                    const ox = tx * freq + off[0];
+                    const oy = ty * freq + off[1];
+                    const oz = tz * freq + off[2];
+                    const ow = tw * freq + off[3];
+                    let n;
+                    if (noiseType === 'simplex') n = noiseGen.simplex4d(ox, oy, oz, ow);
+                    else if (noiseType === 'perlin') n = noiseGen.perlin4d(ox, oy, oz, ow);
+                    else n = noiseGen.value4d(ox, oy, oz, ow);
+
+                    if (ridged) {
+                        n = 1.0 - Math.abs(n);
+                        n = n * n * ridgeWeight;
+                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                    }
+                    noiseValue += n * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    freq *= lacunarity;
+                }
+            } else if (noiseType === 'waves') {
+                let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                for (let o = 0; o < octaves; o++) {
+                    const off = OCTAVE_OFFSETS_4D[o & 15];
+                    fbm += noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]) * amplitude;
+                    fbmMax += amplitude;
+                    amplitude *= persistence;
+                    freq *= lacunarity;
+                }
+                if (fbmMax > 0) fbm /= fbmMax;
+                let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 1.75));
+                if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                noiseValue = n;
+                maxValue = 1;
+            } else if (noiseType === 'caustics') {
+                let amplitude = 1, freq = 1;
+                for (let o = 0; o < octaves; o++) {
+                    const off = OCTAVE_OFFSETS_4D[o & 15];
+                    const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq + off[0], ty * freq + off[1], tz * freq + off[2], tw * freq + off[3]));
+                    const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq + off[2], (tw + 3.7) * freq + off[3], (tx - 2.3) * freq + off[0], (ty - 2.3) * freq + off[1]));
+                    let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue += n * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    freq *= lacunarity;
+                }
+            } else if (noiseType === 'brick') {
+                let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                for (let o = 0; o < octaves; o++) {
+                    const off = OCTAVE_OFFSETS_4D[o & 15];
+                    fbm += noiseGen.simplex4d(tx * freq * 2 + off[0], ty * freq * 2 + off[1], tz * freq * 2 + off[2], tw * freq * 2 + off[3]) * amplitude;
+                    fbmMax += amplitude;
+                    amplitude *= persistence;
+                    freq *= lacunarity;
+                }
+                if (fbmMax > 0) fbm /= fbmMax;
+                let n = noiseGen.brickPattern(((u % 1) + 1) % 1, ((v % 1) + 1) % 1, brickCols, brickRows, fbm);
+                if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                noiseValue = n;
+                maxValue = 1;
+            } else {
+                // Seamless Worley
+                let amplitude = 1;
+                let freqMult = 1;
+                for (let o = 0; o < octaves; o++) {
+                    const pX = Math.max(1, Math.round(worleyPeriodX * freqMult));
+                    const pY = Math.max(1, Math.round(worleyPeriodY * freqMult));
+                    let n = noiseGen.worleySeamless(u * pX, v * pY, pX, pY, worleyType, worleyDist);
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue += n * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    freqMult *= lacunarity;
+                }
+            }
+        } else {
+            // Non-Seamless Standard 2D (with Pythagorean Octave Rotation & Phase Decorrelation)
+            const baseSx = nx / scale;
+            const baseSy = ny / scale;
+
+            if (noiseType === 'waves') {
+                let fbm = 0, fbmMax = 0, amplitude = 1;
+                let rx = baseSx, ry = baseSy;
+                for (let o = 0; o < octaves; o++) {
+                    fbm += noiseGen.simplex2d(rx + o * 17.3, ry + o * 29.7) * amplitude;
+                    fbmMax += amplitude;
+                    amplitude *= persistence;
+                    const nrx = (rx * ROT2_COS - ry * ROT2_SIN) * lacunarity;
+                    const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
+                    rx = nrx; ry = nry;
+                }
+                if (fbmMax > 0) fbm /= fbmMax;
+                let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
+                if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                noiseValue = n;
+                maxValue = 1;
+            } else if (noiseType === 'caustics') {
+                let amplitude = 1;
+                let rx = baseSx, ry = baseSy;
+                for (let o = 0; o < octaves; o++) {
+                    const n1 = 1.0 - Math.abs(noiseGen.simplex2d(rx + o * 13.1, ry + o * 23.7));
+                    const n2 = 1.0 - Math.abs(noiseGen.simplex2d(ry + 17.3, rx - 11.7));
+                    let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 2.6) * 2.0 - 1.0;
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue += n * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    const nrx = (rx * ROT2_COS - ry * ROT2_SIN) * lacunarity;
+                    const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
+                    rx = nrx; ry = nry;
+                }
+            } else if (noiseType === 'brick') {
+                let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                for (let o = 0; o < octaves; o++) {
+                    fbm += noiseGen.simplex2d(baseSx * freq * 2 + o * 17.3, baseSy * freq * 2 + o * 29.7) * amplitude;
+                    fbmMax += amplitude;
+                    amplitude *= persistence;
+                    freq *= lacunarity;
+                }
+                if (fbmMax > 0) fbm /= fbmMax;
+                let n = noiseGen.brickPattern(u, v, brickCols, brickRows, fbm);
+                if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                noiseValue = n;
+                maxValue = 1;
+            } else {
+                let amplitude = 1;
+                let rx = baseSx, ry = baseSy;
+                let ridgeWeight = 1.0;
+                for (let o = 0; o < octaves; o++) {
+                    const sx = rx + o * 17.31;
+                    const sy = ry + o * 29.47;
+                    let n;
+                    if (noiseType === 'simplex') n = noiseGen.simplex2d(sx, sy);
+                    else if (noiseType === 'perlin') n = noiseGen.perlin(sx, sy);
+                    else if (noiseType === 'value') n = noiseGen.value(sx, sy);
+                    else n = noiseGen.worley(sx, sy, worleyType, worleyDist);
+
+                    if (ridged) {
+                        n = 1.0 - Math.abs(n);
+                        n = n * n * ridgeWeight;
+                        ridgeWeight = Math.max(0.15, Math.min(1.0, n * 1.8));
+                    }
+                    noiseValue += n * amplitude;
+                    maxValue += amplitude;
+                    amplitude *= persistence;
+                    const nrx = (rx * ROT2_COS - ry * ROT2_SIN) * lacunarity;
+                    const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
+                    rx = nrx; ry = nry;
+                }
+            }
+        }
+
+        if (maxValue > 0) {
+            return ridged ? Math.min(1.0, (noiseValue / maxValue) * 1.25) : ((noiseValue / maxValue + 1.0) * 0.5);
+        }
+        return 0.5;
+    };
 
     for (let y = startY; y < endY; y++) {
         const localY = y - startY;
         for (let x = 0; x < width; x++) {
-            let u = x / width;
-            let v = y / height;
-            let nx = x;
-            let ny = y;
-
-            // Turbulence / Domain Warping
-            if (turbStrength > 0) {
-                let wx, wy;
-                if (seamless) {
-                    const tnx = Math.cos(twoPi * u) * turbRx;
-                    const tny = Math.sin(twoPi * u) * turbRx;
-                    const tnz = Math.cos(twoPi * v) * turbRy;
-                    const tnw = Math.sin(twoPi * v) * turbRy;
-
-                    wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
-                    wy = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
-                } else {
-                    wx = turbGen.simplex2d(x / turbScale, y / turbScale);
-                    wy = turbGen.simplex2d((x + 1000) / turbScale, (y + 1000) / turbScale);
-                }
-                nx += wx * turbStrength;
-                ny += wy * turbStrength;
-                u = nx / width;
-                v = ny / height;
-            }
-
-            let noiseValue = 0;
-            let maxValue = 0;
-
-            if (seamless) {
-                const tx = Math.cos(twoPi * u) * Rx;
-                const ty = Math.sin(twoPi * u) * Rx;
-                const tz = Math.cos(twoPi * v) * Ry;
-                const tw = Math.sin(twoPi * v) * Ry;
-
-                if (noiseType === 'simplex' || noiseType === 'perlin' || noiseType === 'value') {
-                    let amplitude = 1;
-                    let freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        let n;
-                        if (noiseType === 'simplex') n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                        else if (noiseType === 'perlin') n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                        else n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
-
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                        noiseValue += n * amplitude;
-                        maxValue += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                } else if (noiseType === 'waves') {
-                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq) * amplitude;
-                        fbmMax += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                    if (fbmMax > 0) fbm /= fbmMax;
-                    const waveCyclesX = Math.max(1, Math.round(cyclesX));
-                    const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
-                    let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 1.75));
-                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                    noiseValue = n;
-                    maxValue = 1;
-                } else if (noiseType === 'caustics') {
-                    let amplitude = 1, freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq));
-                        const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq, (tw + 3.7) * freq, (tx - 2.3) * freq, (ty - 2.3) * freq));
-                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                        noiseValue += n * amplitude;
-                        maxValue += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                } else if (noiseType === 'brick') {
-                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex4d(tx * freq * 2, ty * freq * 2, tz * freq * 2, tw * freq * 2) * amplitude;
-                        fbmMax += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                    if (fbmMax > 0) fbm /= fbmMax;
-                    const cols = Math.max(2, Math.round(width / scale));
-                    const rows = Math.max(4, Math.round((height / scale) * 2));
-                    let n = noiseGen.brickPattern(((u % 1) + 1) % 1, ((v % 1) + 1) % 1, cols, rows, fbm);
-                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                    noiseValue = n;
-                    maxValue = 1;
-                } else {
-                    // Seamless Worley
-                    const periodX = Math.max(1, Math.round(width / scale));
-                    const periodY = Math.max(1, Math.round(height / scale));
-                    let amplitude = 1;
-                    let freqMult = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        const pX = Math.max(1, Math.round(periodX * freqMult));
-                        const pY = Math.max(1, Math.round(periodY * freqMult));
-                        let n = noiseGen.worleySeamless(u * pX, v * pY, pX, pY, worleyType, worleyDist);
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                        noiseValue += n * amplitude;
-                        maxValue += amplitude;
-                        amplitude *= persistence;
-                        freqMult *= lacunarity;
-                    }
-                }
+            let noiseValue;
+            if (!useRGSS) {
+                noiseValue = evaluatePoint(x, y);
             } else {
-                // Non-Seamless Standard 2D
-                const baseSx = nx / scale;
-                const baseSy = ny / scale;
-
-                if (noiseType === 'waves') {
-                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex2d(baseSx * freq, baseSy * freq) * amplitude;
-                        fbmMax += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                    if (fbmMax > 0) fbm /= fbmMax;
-                    let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
-                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                    noiseValue = n;
-                    maxValue = 1;
-                } else if (noiseType === 'caustics') {
-                    let amplitude = 1, freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        const sx = baseSx * freq;
-                        const sy = baseSy * freq;
-                        const n1 = 1.0 - Math.abs(noiseGen.simplex2d(sx, sy));
-                        const n2 = 1.0 - Math.abs(noiseGen.simplex2d(sy + 17.3, sx - 11.7));
-                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                        noiseValue += n * amplitude;
-                        maxValue += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                } else if (noiseType === 'brick') {
-                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        fbm += noiseGen.simplex2d(baseSx * freq * 2, baseSy * freq * 2) * amplitude;
-                        fbmMax += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                    if (fbmMax > 0) fbm /= fbmMax;
-                    const cols = Math.max(2, Math.round(width / scale));
-                    const rows = Math.max(4, Math.round((height / scale) * 2));
-                    let n = noiseGen.brickPattern(u, v, cols, rows, fbm);
-                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                    noiseValue = n;
-                    maxValue = 1;
-                } else {
-                    let amplitude = 1;
-                    let freq = 1;
-                    for (let o = 0; o < octaves; o++) {
-                        const sx = baseSx * freq;
-                        const sy = baseSy * freq;
-                        let n;
-                        if (noiseType === 'simplex') n = noiseGen.simplex2d(sx, sy);
-                        else if (noiseType === 'perlin') n = noiseGen.perlin(sx, sy);
-                        else if (noiseType === 'value') n = noiseGen.value(sx, sy);
-                        else n = noiseGen.worley(sx, sy, worleyType, worleyDist);
-
-                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                        noiseValue += n * amplitude;
-                        maxValue += amplitude;
-                        amplitude *= persistence;
-                        freq *= lacunarity;
-                    }
-                }
-            }
-
-            if (maxValue > 0) {
-                noiseValue = ridged ? (noiseValue / maxValue) : ((noiseValue / maxValue + 1.0) * 0.5);
-            } else {
-                noiseValue = 0.5;
+                // 4x Rotated Grid Super-Sampling (RGSS) across 16K / 32K virtual texel footprint
+                const s0 = evaluatePoint((x + 0.125) * scaleX, (y + 0.375) * scaleY);
+                const s1 = evaluatePoint((x + 0.375) * scaleX, (y + 0.875) * scaleY);
+                const s2 = evaluatePoint((x + 0.625) * scaleX, (y + 0.125) * scaleY);
+                const s3 = evaluatePoint((x + 0.875) * scaleX, (y + 0.625) * scaleY);
+                noiseValue = 0.25 * (s0 + s1 + s2 + s3);
             }
 
             // Post-Processing
