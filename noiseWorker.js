@@ -607,29 +607,34 @@ function renderNoiseChunk(params) {
     const heightData = new Float32Array(width * chunkHeight);
 
     const twoPi = 2 * Math.PI;
-    // Scale-consistent toroidal radii: arc length 2*pi*R matches vWidth/scale & vHeight/scale
-    const cyclesX = Math.max(0.25, vWidth / scale);
-    const cyclesY = Math.max(0.25, vHeight / scale);
+    // Resolution-invariant canonical domain: preserves exact framing from 256px Fast Preview up to 32K
+    const minDim = Math.max(1, Math.min(vWidth, vHeight));
+    const domainW = 256.0 * (vWidth / minDim);
+    const domainH = 256.0 * (vHeight / minDim);
+
+    // Scale-consistent toroidal radii: arc length 2*pi*R matches domainW/scale & domainH/scale
+    const cyclesX = Math.max(0.25, domainW / scale);
+    const cyclesY = Math.max(0.25, domainH / scale);
     const Rx = cyclesX / twoPi;
     const Ry = cyclesY / twoPi;
 
-    const turbCyclesX = Math.max(0.25, vWidth / turbScale);
-    const turbCyclesY = Math.max(0.25, vHeight / turbScale);
+    const turbCyclesX = Math.max(0.25, domainW / turbScale);
+    const turbCyclesY = Math.max(0.25, domainH / turbScale);
     const turbRx = turbCyclesX / twoPi;
     const turbRy = turbCyclesY / twoPi;
 
-    const brickCols = Math.max(2, Math.round(vWidth / scale));
-    const brickRows = Math.max(4, Math.round((vHeight / scale) * 2));
-    const worleyPeriodX = Math.max(1, Math.round(vWidth / scale));
-    const worleyPeriodY = Math.max(1, Math.round(vHeight / scale));
+    const brickCols = Math.max(2, Math.round(domainW / scale));
+    const brickRows = Math.max(4, Math.round((domainH / scale) * 2));
+    const worleyPeriodX = Math.max(1, Math.round(domainW / scale));
+    const worleyPeriodY = Math.max(1, Math.round(domainH / scale));
     const waveCyclesX = Math.max(1, Math.round(cyclesX));
     const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
 
     const evaluatePoint = (vx, vy) => {
         let u = vx / vWidth;
         let v = vy / vHeight;
-        let nx = vx;
-        let ny = vy;
+        let nx = u * domainW;
+        let ny = v * domainH;
 
         // Turbulence / Domain Warping
         if (turbStrength > 0) {
@@ -643,13 +648,13 @@ function renderNoiseChunk(params) {
                 wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
                 wy = turbGen.simplex4d(tnx + 13.7, tny + 29.3, tnz + 41.1, tnw + 53.9);
             } else {
-                wx = turbGen.simplex2d(vx / turbScale, vy / turbScale);
-                wy = turbGen.simplex2d((vx + 521.3) / turbScale, (vy + 863.7) / turbScale);
+                wx = turbGen.simplex2d(nx / turbScale, ny / turbScale);
+                wy = turbGen.simplex2d((nx + 521.3) / turbScale, (ny + 863.7) / turbScale);
             }
             nx += wx * turbStrength;
             ny += wy * turbStrength;
-            u = nx / vWidth;
-            v = ny / vHeight;
+            u = nx / domainW;
+            v = ny / domainH;
         }
 
         let noiseValue = 0;
