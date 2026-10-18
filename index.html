@@ -2136,6 +2136,15 @@ class ThreeController {
             envMapIntensity: 1.0,
             side: THREE.DoubleSide
         });
+        this.material.onBeforeCompile = (shader) => {
+            shader.vertexShader = 'attribute float dispWeight;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <displacementmap_vertex>',
+                `#ifdef USE_DISPLACEMENTMAP
+                    transformed += normalize( objectNormal ) * ( ( texture2D( displacementMap, vUv ).x * displacementScale + displacementBias ) * dispWeight );
+                #endif`
+            );
+        };
 
         this.initGeometries();
         this.setMesh('sphere');
@@ -2193,16 +2202,24 @@ class ThreeController {
         }
     }
 
-    // Helper to build subdivided, properly wound (CCW outward) triangles & quads
-    buildSubdividedMesh(faces, subdivisions = 24) {
+    // Helper to build subdivided, properly wound (CCW outward) triangles & quads with watertight edge-pinned displacement
+    buildSubdividedMesh(faces, subdivisions = 28, edgeMargin = 0.14, maxWeight = 0.65) {
         const positions = [];
         const uvs = [];
-        const pushTri = (p0, p1, p2, uv0, uv1, uv2) => {
+        const dispWeights = [];
+        const smoothstep = (edge0, edge1, x) => {
+            const t = Math.max(0.0, Math.min(1.0, (x - edge0) / Math.max(1e-5, edge1 - edge0)));
+            return t * t * (3.0 - 2.0 * t);
+        };
+        const pushTri = (p0, p1, p2, uv0, uv1, uv2, w0, w1, w2) => {
             positions.push(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
             uvs.push(uv0[0], uv0[1], uv1[0], uv1[1], uv2[0], uv2[1]);
+            dispWeights.push(w0, w1, w2);
         };
         const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
         const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+        const quadW = (tx, ty) => smoothstep(0.0, edgeMargin, Math.min(tx, 1.0 - tx, ty, 1.0 - ty)) * maxWeight;
+        const triW = (u, v, w) => smoothstep(0.0, edgeMargin * 0.75, Math.min(u, v, w)) * maxWeight;
 
         faces.forEach(face => {
             const n = subdivisions;
@@ -2220,17 +2237,21 @@ class ThreeController {
                         const p01 = lerp3(left1, right1, tx0), p11 = lerp3(left1, right1, tx1);
                         const t00 = lerp2(uvl0, uvr0, tx0), t10 = lerp2(uvl0, uvr0, tx1);
                         const t01 = lerp2(uvl1, uvr1, tx0), t11 = lerp2(uvl1, uvr1, tx1);
-                        pushTri(p00, p10, p11, t00, t10, t11);
-                        pushTri(p00, p11, p01, t00, t11, t01);
+                        const w00 = quadW(tx0, ty0), w10 = quadW(tx1, ty0);
+                        const w01 = quadW(tx0, ty1), w11 = quadW(tx1, ty1);
+                        pushTri(p00, p10, p11, t00, t10, t11, w00, w10, w11);
+                        pushTri(p00, p11, p01, t00, t11, t01, w00, w11, w01);
                     }
                 }
             } else if (face.type === 'tri') {
                 const { v0, v1, v2, uv0, uv1, uv2 } = face;
                 const gridP = [];
                 const gridUV = [];
+                const gridW = [];
                 for (let j = 0; j <= n; j++) {
                     const rowP = [];
                     const rowUV = [];
+                    const rowW = [];
                     const count = n - j;
                     for (let i = 0; i <= count; i++) {
                         const u = i / n;
@@ -2245,16 +2266,26 @@ class ThreeController {
                             w * uv0[0] + u * uv1[0] + v * uv2[0],
                             w * uv0[1] + u * uv1[1] + v * uv2[1]
                         ]);
+                        rowW.push(triW(u, v, w));
                     }
                     gridP.push(rowP);
                     gridUV.push(rowUV);
+                    gridW.push(rowW);
                 }
                 for (let j = 0; j < n; j++) {
                     const count = n - j;
                     for (let i = 0; i < count; i++) {
-                        pushTri(gridP[j][i], gridP[j][i + 1], gridP[j + 1][i], gridUV[j][i], gridUV[j][i + 1], gridUV[j + 1][i]);
+                        pushTri(
+                            gridP[j][i], gridP[j][i + 1], gridP[j + 1][i],
+                            gridUV[j][i], gridUV[j][i + 1], gridUV[j + 1][i],
+                            gridW[j][i], gridW[j][i + 1], gridW[j + 1][i]
+                        );
                         if (i + 1 < count) {
-                            pushTri(gridP[j][i + 1], gridP[j + 1][i + 1], gridP[j + 1][i], gridUV[j][i + 1], gridUV[j + 1][i + 1], gridUV[j + 1][i]);
+                            pushTri(
+                                gridP[j][i + 1], gridP[j + 1][i + 1], gridP[j + 1][i],
+                                gridUV[j][i + 1], gridUV[j + 1][i + 1], gridUV[j + 1][i],
+                                gridW[j][i + 1], gridW[j + 1][i + 1], gridW[j + 1][i]
+                            );
                         }
                     }
                 }
@@ -2264,43 +2295,230 @@ class ThreeController {
         const geo = new THREE.BufferGeometry();
         geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
         geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        geo.setAttribute('dispWeight', new THREE.BufferAttribute(new Float32Array(dispWeights), 1));
         geo.computeVertexNormals();
+        return geo;
+    }
+
+    buildCylinderOrConeGeometry(topRadius, bottomRadius, height, radialSegs = 80, heightSegs = 40, capRings = 20) {
+        const positions = [];
+        const normals = [];
+        const uvs = [];
+        const dispWeights = [];
+        const halfH = height * 0.5;
+        const twoPi = Math.PI * 2.0;
+        const slopeY = (bottomRadius - topRadius) / height;
+        const nLenInv = 1.0 / Math.sqrt(1.0 + slopeY * slopeY);
+        const smooth = (t) => {
+            const c = Math.max(0.0, Math.min(1.0, t));
+            return c * c * (3.0 - 2.0 * c);
+        };
+
+        const pushVert = (px, py, pz, nx, ny, nz, u, v, w) => {
+            positions.push(px, py, pz);
+            normals.push(nx, ny, nz);
+            uvs.push(u, v);
+            dispWeights.push(w);
+        };
+
+        // 1. Lateral Wall (2:1 seamless horizontal UV wrap for 1:1 isotropic texels)
+        for (let j = 0; j < heightSegs; j++) {
+            const v0 = j / heightSegs;
+            const v1 = (j + 1) / heightSegs;
+            const y0 = -halfH + v0 * height;
+            const y1 = -halfH + v1 * height;
+            const r0 = bottomRadius + (topRadius - bottomRadius) * v0;
+            const r1 = bottomRadius + (topRadius - bottomRadius) * v1;
+
+            const wFunc = (v) => {
+                const botFade = smooth(v / 0.14);
+                const topFade = topRadius < 1e-4 ? (smooth((1.0 - v) / 0.26) * (1.0 - v)) : smooth((1.0 - v) / 0.14);
+                return botFade * topFade * 0.65;
+            };
+            const w0 = wFunc(v0);
+            const w1 = wFunc(v1);
+
+            for (let i = 0; i < radialSegs; i++) {
+                const u0 = (i / radialSegs) * 2.0;
+                const u1 = ((i + 1) / radialSegs) * 2.0;
+                const th0 = (i / radialSegs) * twoPi;
+                const th1 = ((i + 1) / radialSegs) * twoPi;
+
+                const c0 = Math.cos(th0), s0 = -Math.sin(th0);
+                const c1 = Math.cos(th1), s1 = -Math.sin(th1);
+
+                const nx0 = c0 * nLenInv, ny0 = slopeY * nLenInv, nz0 = s0 * nLenInv;
+                const nx1 = c1 * nLenInv, ny1 = slopeY * nLenInv, nz1 = s1 * nLenInv;
+
+                if (r1 > 1e-5) {
+                    pushVert(r0 * c0, y0, r0 * s0, nx0, ny0, nz0, u0, v0, w0);
+                    pushVert(r0 * c1, y0, r0 * s1, nx1, ny1, nz1, u1, v0, w0);
+                    pushVert(r1 * c1, y1, r1 * s1, nx1, ny1, nz1, u1, v1, w1);
+                }
+                if (r0 > 1e-5) {
+                    pushVert(r0 * c0, y0, r0 * s0, nx0, ny0, nz0, u0, v0, w0);
+                    pushVert(r1 * c1, y1, r1 * s1, nx1, ny1, nz1, u1, v1, w1);
+                    pushVert(r1 * c0, y1, r1 * s0, nx0, ny0, nz0, u0, v1, w1);
+                }
+            }
+        }
+
+        // 2. Multi-Ring Subdivided Caps (Planar Disk UVs & Rim-Pinned Displacement)
+        const buildCap = (radius, yPos, ny) => {
+            if (radius <= 1e-4) return;
+            for (let k = 0; k < capRings; k++) {
+                const f0 = k / capRings;
+                const f1 = (k + 1) / capRings;
+                const rho0 = f0 * radius;
+                const rho1 = f1 * radius;
+                const w0 = smooth((1.0 - f0) / 0.18) * 0.55;
+                const w1 = smooth((1.0 - f1) / 0.18) * 0.55;
+
+                for (let i = 0; i < radialSegs; i++) {
+                    const th0 = (i / radialSegs) * twoPi;
+                    const th1 = ((i + 1) / radialSegs) * twoPi;
+                    const c0 = Math.cos(th0), s0 = -Math.sin(th0);
+                    const c1 = Math.cos(th1), s1 = -Math.sin(th1);
+
+                    const p00 = [rho0 * c0, yPos, rho0 * s0], uv00 = [0.5 + 0.5 * f0 * c0, 0.5 + 0.5 * f0 * s0 * ny];
+                    const p10 = [rho1 * c0, yPos, rho1 * s0], uv10 = [0.5 + 0.5 * f1 * c0, 0.5 + 0.5 * f1 * s0 * ny];
+                    const p11 = [rho1 * c1, yPos, rho1 * s1], uv11 = [0.5 + 0.5 * f1 * c1, 0.5 + 0.5 * f1 * s1 * ny];
+                    const p01 = [rho0 * c1, yPos, rho0 * s1], uv01 = [0.5 + 0.5 * f0 * c1, 0.5 + 0.5 * f0 * s1 * ny];
+
+                    if (ny > 0) {
+                        pushVert(p00[0], p00[1], p00[2], 0, 1, 0, uv00[0], uv00[1], w0);
+                        pushVert(p10[0], p10[1], p10[2], 0, 1, 0, uv10[0], uv10[1], w1);
+                        pushVert(p11[0], p11[1], p11[2], 0, 1, 0, uv11[0], uv11[1], w1);
+                        if (k > 0) {
+                            pushVert(p00[0], p00[1], p00[2], 0, 1, 0, uv00[0], uv00[1], w0);
+                            pushVert(p11[0], p11[1], p11[2], 0, 1, 0, uv11[0], uv11[1], w1);
+                            pushVert(p01[0], p01[1], p01[2], 0, 1, 0, uv01[0], uv01[1], w0);
+                        }
+                    } else {
+                        pushVert(p01[0], p01[1], p01[2], 0, -1, 0, uv01[0], uv01[1], w0);
+                        pushVert(p11[0], p11[1], p11[2], 0, -1, 0, uv11[0], uv11[1], w1);
+                        pushVert(p10[0], p10[1], p10[2], 0, -1, 0, uv10[0], uv10[1], w1);
+                        if (k > 0) {
+                            pushVert(p01[0], p01[1], p01[2], 0, -1, 0, uv01[0], uv01[1], w0);
+                            pushVert(p10[0], p10[1], p10[2], 0, -1, 0, uv10[0], uv10[1], w1);
+                            pushVert(p00[0], p00[1], p00[2], 0, -1, 0, uv00[0], uv00[1], w0);
+                        }
+                    }
+                }
+            }
+        };
+
+        buildCap(topRadius, halfH, 1);
+        buildCap(bottomRadius, -halfH, -1);
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+        geo.setAttribute('normal', new THREE.BufferAttribute(new Float32Array(normals), 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        geo.setAttribute('dispWeight', new THREE.BufferAttribute(new Float32Array(dispWeights), 1));
         return geo;
     }
 
     initGeometries() {
         this.geometries = {};
-        this.geometries.block = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
+
+        // 1. Sphere (Untouched reference mesh)
         this.geometries.sphere = new THREE.SphereGeometry(0.65, 64, 64);
-        this.geometries.cylinder = new THREE.CylinderGeometry(0.5, 0.5, 1, 64, 32);
-        this.geometries.torus = new THREE.TorusGeometry(0.42, 0.16, 32, 100);
-        this.geometries.plane = new THREE.PlaneGeometry(1.6, 1.6, 64, 64);
-        this.geometries.cone = new THREE.ConeGeometry(0.5, 1, 64, 32);
-        this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.65, 16);
-        this.geometries.torusKnot = new THREE.TorusKnotGeometry(0.38, 0.13, 120, 20);
 
-        // Properly wound (CCW outward) & subdivided Wedge geometry
+        // 2. Cube (Block) — 6 subdivided faces with watertight edge-pinned displacement
+        const s = 0.52;
+        this.geometries.block = this.buildSubdividedMesh([
+            { type: 'quad', v00: [-s, -s, s],  v10: [s, -s, s],  v11: [s, s, s],   v01: [-s, s, s],  uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [s, -s, -s],  v10: [-s, -s, -s],v11: [-s, s, -s], v01: [s, s, -s],  uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [s, -s, s],   v10: [s, -s, -s], v11: [s, s, -s],  v01: [s, s, s],   uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [-s, -s, -s], v10: [-s, -s, s], v11: [-s, s, s],  v01: [-s, s, -s], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [-s, s, s],   v10: [s, s, s],   v11: [s, s, -s],  v01: [-s, s, -s], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [-s, -s, -s], v10: [s, -s, -s], v11: [s, -s, s],  v01: [-s, -s, s], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] }
+        ], 32, 0.14, 0.65);
+
+        // 3. Cylinder — 2:1 seamless lateral UVs + multi-ring subdivided caps + rim-pinned displacement
+        this.geometries.cylinder = this.buildCylinderOrConeGeometry(0.50, 0.50, 1.04, 80, 40, 20);
+
+        // 4. Cone — Analytical slope normals + apex/rim-pinned displacement (prevents apex explosion) + subdivided base cap
+        this.geometries.cone = this.buildCylinderOrConeGeometry(0.0, 0.56, 1.12, 80, 40, 20);
+
+        // 5. Torus — 2:1 isotropic seamless ring UVs + angled showcase orientation
+        const torusGeo = new THREE.TorusGeometry(0.45, 0.18, 64, 128);
+        torusGeo.rotateX(-Math.PI * 0.28);
+        const torusUV = torusGeo.attributes.uv;
+        const torusW = new Float32Array(torusUV.count);
+        for (let i = 0; i < torusUV.count; i++) {
+            torusUV.setX(i, torusUV.getX(i) * 2.0);
+            torusW[i] = 0.55;
+        }
+        torusGeo.setAttribute('dispWeight', new THREE.BufferAttribute(torusW, 1));
+        this.geometries.torus = torusGeo;
+
+        // 6. Torus Knot — 6:1 longitudinal seamless UVs (eliminates 800% spaghetti stretch) + self-intersection-safe displacement
+        const knotGeo = new THREE.TorusKnotGeometry(0.38, 0.125, 192, 48);
+        const knotUV = knotGeo.attributes.uv;
+        const knotW = new Float32Array(knotUV.count);
+        for (let i = 0; i < knotUV.count; i++) {
+            knotUV.setX(i, knotUV.getX(i) * 6.0);
+            knotW[i] = 0.40;
+        }
+        knotGeo.setAttribute('dispWeight', new THREE.BufferAttribute(knotW, 1));
+        this.geometries.torusKnot = knotGeo;
+
+        // 7. Plane — Angled showcase swatch (-52° tilt so front face stays lit across 360° turntable rotation) with border-pinned frame
+        const ps = 0.72;
+        const planeGeo = this.buildSubdividedMesh([
+            { type: 'quad', v00: [-ps, -ps, 0], v10: [ps, -ps, 0], v11: [ps, ps, 0], v01: [-ps, ps, 0], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] }
+        ], 64, 0.08, 0.85);
+        planeGeo.rotateX(-Math.PI * 0.29);
+        this.geometries.plane = planeGeo;
+
+        // 8. Wedge — Properly wound (CCW outward), watertight edge-pinned ramp
         this.geometries.wedge = this.buildSubdividedMesh([
-            { type: 'quad', v00: [-0.5, -0.5, 0.5], v10: [0.5, -0.5, 0.5], v11: [0.5, 0.5, -0.5], v01: [-0.5, 0.5, -0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            { type: 'quad', v00: [0.5, -0.5, -0.5], v10: [-0.5, -0.5, -0.5], v11: [-0.5, 0.5, -0.5], v01: [0.5, 0.5, -0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            { type: 'quad', v00: [-0.5, -0.5, -0.5], v10: [0.5, -0.5, -0.5], v11: [0.5, -0.5, 0.5], v01: [-0.5, -0.5, 0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            { type: 'tri', v0: [-0.5, -0.5, -0.5], v1: [-0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
-            { type: 'tri', v0: [0.5, -0.5, 0.5], v1: [0.5, -0.5, -0.5], v2: [0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [1, 1] }
-        ], 20);
+            { type: 'quad', v00: [-s, -s, s],  v10: [s, -s, s],  v11: [s, s, -s],  v01: [-s, s, -s], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [s, -s, -s],  v10: [-s, -s, -s],v11: [-s, s, -s], v01: [s, s, -s],  uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'quad', v00: [-s, -s, -s], v10: [s, -s, -s], v11: [s, -s, s],  v01: [-s, -s, s], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'tri',  v0: [-s, -s, -s],  v1: [-s, -s, s],  v2: [-s, s, -s],  uv0: [0, 0],  uv1: [1, 0],  uv2: [0, 1] },
+            { type: 'tri',  v0: [s, -s, s],    v1: [s, -s, -s],  v2: [s, s, -s],   uv0: [0, 0],  uv1: [1, 0],  uv2: [1, 1] }
+        ], 28, 0.14, 0.65);
 
-        // Properly wound (CCW outward) & subdivided Corner Wedge geometry
+        // 9. Corner Wedge — Unskewed right-angle UVs on all 4 triangular slopes + watertight edge-pinned apex
         this.geometries.cornerWedge = this.buildSubdividedMesh([
-            { type: 'quad', v00: [-0.5, -0.5, -0.5], v10: [0.5, -0.5, -0.5], v11: [0.5, -0.5, 0.5], v01: [-0.5, -0.5, 0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
-            { type: 'tri', v0: [0.5, -0.5, -0.5], v1: [-0.5, -0.5, -0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [1, 1] },
-            { type: 'tri', v0: [-0.5, -0.5, -0.5], v1: [-0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
-            { type: 'tri', v0: [-0.5, -0.5, 0.5], v1: [0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
-            { type: 'tri', v0: [0.5, -0.5, 0.5], v1: [0.5, -0.5, -0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] }
-        ], 20);
+            { type: 'quad', v00: [-s, -s, -s], v10: [s, -s, -s], v11: [s, -s, s],  v01: [-s, -s, s], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            { type: 'tri',  v0: [s, -s, -s],   v1: [-s, -s, -s], v2: [-s, s, -s],  uv0: [0, 0],  uv1: [1, 0],  uv2: [1, 1] },
+            { type: 'tri',  v0: [-s, -s, -s],  v1: [-s, -s, s],  v2: [-s, s, -s],  uv0: [0, 0],  uv1: [1, 0],  uv2: [0, 1] },
+            { type: 'tri',  v0: [-s, -s, s],   v1: [s, -s, s],   v2: [-s, s, -s],  uv0: [0, 0],  uv1: [1, 0],  uv2: [0, 1] },
+            { type: 'tri',  v0: [s, -s, s],    v1: [s, -s, -s],  v2: [-s, s, -s],  uv0: [0, 0],  uv1: [1, 0],  uv2: [1, 1] }
+        ], 28, 0.14, 0.65);
 
-        // Populate uv2 on all geometries so Three.js aoMap and aoMapIntensity work natively
+        // 10. Icosahedron — True 20-sided flat-faced Platonic Icosahedron with conformal equilateral UVs
+        const baseIco = new THREE.IcosahedronGeometry(0.70, 0);
+        const icoPos = baseIco.attributes.position;
+        const icoFaces = [];
+        const eqHeight = Math.sqrt(3.0) * 0.5;
+        for (let i = 0; i < icoPos.count; i += 3) {
+            icoFaces.push({
+                type: 'tri',
+                v0: [icoPos.getX(i), icoPos.getY(i), icoPos.getZ(i)],
+                v1: [icoPos.getX(i + 1), icoPos.getY(i + 1), icoPos.getZ(i + 1)],
+                v2: [icoPos.getX(i + 2), icoPos.getY(i + 2), icoPos.getZ(i + 2)],
+                uv0: [0.0, 0.0],
+                uv1: [1.0, 0.0],
+                uv2: [0.5, eqHeight]
+            });
+        }
+        this.geometries.icosahedron = this.buildSubdividedMesh(icoFaces, 16, 0.15, 0.60);
+
+        // Populate uv2 (for AO) and dispWeight (default 1.0 for Sphere) on all geometries
         Object.values(this.geometries).forEach(geo => {
             if (geo.attributes.uv && !geo.attributes.uv2) {
                 geo.setAttribute('uv2', new THREE.BufferAttribute(geo.attributes.uv.array, 2));
+            }
+            if (geo.attributes.position && !geo.attributes.dispWeight) {
+                const count = geo.attributes.position.count;
+                const weights = new Float32Array(count);
+                weights.fill(1.0);
+                geo.setAttribute('dispWeight', new THREE.BufferAttribute(weights, 1));
             }
         });
     }
