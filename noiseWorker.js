@@ -1,13 +1,26 @@
 /**
  * Ultimate Texture Generator - Multi-Threaded Procedural Noise Worker
  * Zero external imports, zero DOM API dependencies. Fully standalone & native.
- * Supports: Perlin, Simplex, Value, and Worley/Cellular with 2D & 4D Toroidal Seamless Tiling.
+ * Supports: Simplex, Perlin, Value, Worley/Cellular, Sine Waves (Wood/Marble),
+ * Optical Caustics, and Procedural Bricks with 2D & 4D Toroidal Seamless Tiling.
  */
 
 // 1. DETERMINISTIC 32-BIT PRNG (Mulberry32)
+function parseNumericSeed(seed) {
+    if (seed !== undefined && seed !== null && seed !== '' && !Number.isNaN(Number(seed))) {
+        return Number(seed) >>> 0;
+    }
+    return 12345;
+}
+
+function numOrDefault(val, fallback) {
+    const n = Number(val);
+    return (val !== undefined && val !== null && val !== '' && Number.isFinite(n)) ? n : fallback;
+}
+
 class SeededRandom {
     constructor(seed) {
-        this.seed = (Number(seed) || 12345) >>> 0;
+        this.seed = parseNumericSeed(seed);
     }
     next() {
         let t = (this.seed = (this.seed + 0x6D2B79F5) >>> 0);
@@ -42,14 +55,14 @@ const grad4 = [
     [1, 1, 1, 0], [1, 1, -1, 0], [1, -1, 1, 0], [1, -1, -1, 0],
     [-1, 1, 1, 0], [-1, 1, -1, 0], [-1, -1, 1, 0], [-1, -1, -1, 0]
 ].map(v => {
-    const len = Math.sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2] + v[3]*v[3]);
+    const len = Math.sqrt(v[0] * v[0] + v[1] * v[1] + v[2] * v[2] + v[3] * v[3]);
     return [v[0] / len, v[1] / len, v[2] / len, v[3] / len];
 });
 
 // 2. NOISE GENERATOR ENGINE
 class NoiseGenerator {
     constructor(seed) {
-        this.seed = (Number(seed) || 12345) >>> 0;
+        this.seed = parseNumericSeed(seed);
         this.prng = new SeededRandom(this.seed);
         this.p = new Uint8Array(256);
         for (let i = 0; i < 256; i++) this.p[i] = i;
@@ -64,6 +77,18 @@ class NoiseGenerator {
         for (let i = 0; i < 1024; i++) this.perm[i] = this.p[i & 255];
     }
 
+    // Deterministic 32-bit integer hash for cellular/brick coordinates (platform-independent)
+    cellHash(ix, iy, channel) {
+        let h = (
+            Math.imul(ix | 0, 374761393) +
+            Math.imul(iy | 0, 668265263) +
+            Math.imul(this.seed | 0, 1442695041) +
+            Math.imul(channel | 0, 2246822519)
+        ) | 0;
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    }
+
     // --- Perlin Noise 2D ---
     gradPerlin2D(hash, x, y) {
         const h = hash & 15;
@@ -73,38 +98,45 @@ class NoiseGenerator {
     }
 
     perlin(x, y) {
-        const X = Math.floor(x) & 255;
-        const Y = Math.floor(y) & 255;
-        x -= Math.floor(x);
-        y -= Math.floor(y);
-        const u = fade(x);
-        const v = fade(y);
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const X = xi & 255;
+        const Y = yi & 255;
+        const fx = x - xi;
+        const fy = y - yi;
+        const u = fade(fx);
+        const v = fade(fy);
         const perm = this.perm;
         const A = perm[X] + Y, AA = perm[A], AB = perm[A + 1];
         const B = perm[X + 1] + Y, BA = perm[B], BB = perm[B + 1];
         return lerp(
-            lerp(this.gradPerlin2D(perm[AA], x, y), this.gradPerlin2D(perm[BA], x - 1, y), u),
-            lerp(this.gradPerlin2D(perm[AB], x, y - 1), this.gradPerlin2D(perm[BB], x - 1, y - 1), u),
+            lerp(this.gradPerlin2D(perm[AA], fx, fy), this.gradPerlin2D(perm[BA], fx - 1, fy), u),
+            lerp(this.gradPerlin2D(perm[AB], fx, fy - 1), this.gradPerlin2D(perm[BB], fx - 1, fy - 1), u),
             v
         );
     }
 
     // --- Perlin Noise 4D (for Toroidal Seamless Tiling) ---
     perlin4d(x, y, z, w) {
-        const ix0 = Math.floor(x) & 255;
-        const iy0 = Math.floor(y) & 255;
-        const iz0 = Math.floor(z) & 255;
-        const iw0 = Math.floor(w) & 255;
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const zi = Math.floor(z);
+        const wi = Math.floor(w);
+
+        const ix0 = xi & 255;
+        const iy0 = yi & 255;
+        const iz0 = zi & 255;
+        const iw0 = wi & 255;
 
         const ix1 = (ix0 + 1) & 255;
         const iy1 = (iy0 + 1) & 255;
         const iz1 = (iz0 + 1) & 255;
         const iw1 = (iw0 + 1) & 255;
 
-        const fx = x - Math.floor(x);
-        const fy = y - Math.floor(y);
-        const fz = z - Math.floor(z);
-        const fw = w - Math.floor(w);
+        const fx = x - xi;
+        const fy = y - yi;
+        const fz = z - zi;
+        const fw = w - wi;
 
         const u = fade(fx);
         const v = fade(fy);
@@ -149,7 +181,7 @@ class NoiseGenerator {
         const n0001 = dot(h0001, fx, fy, fz, fw - 1);
         const n1001 = dot(h1001, fx - 1, fy, fz, fw - 1);
         const n0101 = dot(h0101, fx, fy - 1, fz, fw - 1);
-        const n1101 = dot(h1101, fx - 1, fy - 1, fz - 1, fw - 1);
+        const n1101 = dot(h1101, fx - 1, fy - 1, fz, fw - 1);
         const n0011 = dot(h0011, fx, fy, fz - 1, fw - 1);
         const n1011 = dot(h1011, fx - 1, fy, fz - 1, fw - 1);
         const n0111 = dot(h0111, fx, fy - 1, fz - 1, fw - 1);
@@ -172,7 +204,7 @@ class NoiseGenerator {
         const z0 = lerp(y00, y10, t);
         const z1 = lerp(y01, y11, t);
 
-        return lerp(z0, z1, s);
+        return Math.max(-1, Math.min(1, lerp(z0, z1, s) * 1.45));
     }
 
     // --- Simplex Noise 2D ---
@@ -228,8 +260,8 @@ class NoiseGenerator {
         const k = Math.floor(z + s);
         const l = Math.floor(w + s);
         const t = (i + j + k + l) * G4;
-        const X0 = i - t; const Y0 = j - t; const Z0 = k - t; const W0 = l - t;
-        const x0 = x - X0; const y0 = y - Y0; const z0 = z - Z0; const w0 = w - W0;
+        const X0 = i - t, Y0 = j - t, Z0 = k - t, W0 = l - t;
+        const x0 = x - X0, y0 = y - Y0, z0 = z - Z0, w0 = w - W0;
 
         let c = 0;
         if (x0 > y0) c |= 1; if (x0 > z0) c |= 2; if (x0 > w0) c |= 4;
@@ -258,28 +290,30 @@ class NoiseGenerator {
         const gi4 = perm[ii + 1 + perm[jj + 1 + perm[kk + 1 + perm[ll + 1]]]] & 31;
 
         let n0 = 0, n1 = 0, n2 = 0, n3 = 0, n4 = 0;
-        let t0 = 0.6 - x0*x0 - y0*y0 - z0*z0 - w0*w0;
-        if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad4[gi0][0]*x0 + grad4[gi0][1]*y0 + grad4[gi0][2]*z0 + grad4[gi0][3]*w0); }
-        let t1 = 0.6 - x1*x1 - y1*y1 - z1*z1 - w1*w1;
-        if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad4[gi1][0]*x1 + grad4[gi1][1]*y1 + grad4[gi1][2]*z1 + grad4[gi1][3]*w1); }
-        let t2 = 0.6 - x2*x2 - y2*y2 - z2*z2 - w2*w2;
-        if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad4[gi2][0]*x2 + grad4[gi2][1]*y2 + grad4[gi2][2]*z2 + grad4[gi2][3]*w2); }
-        let t3 = 0.6 - x3*x3 - y3*y3 - z3*z3 - w3*w3;
-        if (t3 > 0) { t3 *= t3; n3 = t3 * t3 * (grad4[gi3][0]*x3 + grad4[gi3][1]*y3 + grad4[gi3][2]*z3 + grad4[gi3][3]*w3); }
-        let t4 = 0.6 - x4*x4 - y4*y4 - z4*z4 - w4*w4;
-        if (t4 > 0) { t4 *= t4; n4 = t4 * t4 * (grad4[gi4][0]*x4 + grad4[gi4][1]*y4 + grad4[gi4][2]*z4 + grad4[gi4][3]*w4); }
+        let t0 = 0.6 - x0 * x0 - y0 * y0 - z0 * z0 - w0 * w0;
+        if (t0 > 0) { t0 *= t0; n0 = t0 * t0 * (grad4[gi0][0] * x0 + grad4[gi0][1] * y0 + grad4[gi0][2] * z0 + grad4[gi0][3] * w0); }
+        let t1 = 0.6 - x1 * x1 - y1 * y1 - z1 * z1 - w1 * w1;
+        if (t1 > 0) { t1 *= t1; n1 = t1 * t1 * (grad4[gi1][0] * x1 + grad4[gi1][1] * y1 + grad4[gi1][2] * z1 + grad4[gi1][3] * w1); }
+        let t2 = 0.6 - x2 * x2 - y2 * y2 - z2 * z2 - w2 * w2;
+        if (t2 > 0) { t2 *= t2; n2 = t2 * t2 * (grad4[gi2][0] * x2 + grad4[gi2][1] * y2 + grad4[gi2][2] * z2 + grad4[gi2][3] * w2); }
+        let t3 = 0.6 - x3 * x3 - y3 * y3 - z3 * z3 - w3 * w3;
+        if (t3 > 0) { t3 *= t3; n3 = t3 * t3 * (grad4[gi3][0] * x3 + grad4[gi3][1] * y3 + grad4[gi3][2] * z3 + grad4[gi3][3] * w3); }
+        let t4 = 0.6 - x4 * x4 - y4 * y4 - z4 * z4 - w4 * w4;
+        if (t4 > 0) { t4 *= t4; n4 = t4 * t4 * (grad4[gi4][0] * x4 + grad4[gi4][1] * y4 + grad4[gi4][2] * z4 + grad4[gi4][3] * w4); }
 
         return 27.0 * (n0 + n1 + n2 + n3 + n4);
     }
 
     // --- Value Noise 2D ---
     value(x, y) {
-        const X = Math.floor(x) & 255;
-        const Y = Math.floor(y) & 255;
-        x -= Math.floor(x);
-        y -= Math.floor(y);
-        const u = fade(x);
-        const v = fade(y);
+        const xi = Math.floor(x);
+        const yi = Math.floor(y);
+        const X = xi & 255;
+        const Y = yi & 255;
+        const fx = x - xi;
+        const fy = y - yi;
+        const u = fade(fx);
+        const v = fade(fy);
         const perm = this.perm;
         const n00 = perm[X + perm[Y]] / 255;
         const n10 = perm[X + 1 + perm[Y]] / 255;
@@ -290,10 +324,9 @@ class NoiseGenerator {
 
     // --- Value Noise 4D (eliminates cross-hatch grid artifacts in seamless mode) ---
     value4d(x, y, z, w) {
-        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
-        const Z = Math.floor(z) & 255; const W = Math.floor(w) & 255;
-        const fx = x - Math.floor(x); const fy = y - Math.floor(y);
-        const fz = z - Math.floor(z); const fw = w - Math.floor(w);
+        const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), wi = Math.floor(w);
+        const X = xi & 255, Y = yi & 255, Z = zi & 255, W = wi & 255;
+        const fx = x - xi, fy = y - yi, fz = z - zi, fw = w - wi;
         const u = fade(fx), v = fade(fy), t = fade(fz), s = fade(fw);
 
         const p = this.perm;
@@ -308,7 +341,7 @@ class NoiseGenerator {
         const c0110 = p[h011 + W] / 255, c1110 = p[h111 + W] / 255;
 
         const c0001 = p[h000 + W + 1] / 255, c1001 = p[h100 + W + 1] / 255;
-        const c0101 = p[h010 + W + 1] / 255, c1101 = p[h100 + W + 1] / 255;
+        const c0101 = p[h010 + W + 1] / 255, c1101 = p[h110 + W + 1] / 255;
         const c0011 = p[h001 + W + 1] / 255, c1011 = p[h101 + W + 1] / 255;
         const c0111 = p[h011 + W + 1] / 255, c1111 = p[h111 + W + 1] / 255;
 
@@ -326,16 +359,25 @@ class NoiseGenerator {
 
     // --- Worley / Cellular Noise Distance Helper ---
     computeDistance(dx, dy, metric) {
-        if (metric === 'manhattan') return Math.abs(dx) + Math.abs(dy);
+        if (metric === 'manhattan') return (Math.abs(dx) + Math.abs(dy)) * 0.75;
         if (metric === 'chebyshev') return Math.max(Math.abs(dx), Math.abs(dy));
         if (metric === 'minkowski') {
             const s = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy));
-            return s * s;
+            return (s * s) * 0.5;
         }
         return Math.sqrt(dx * dx + dy * dy);
     }
 
-    // --- Worley Noise 2D ---
+    formatWorleyOutput(minDist, secondMinDist, type) {
+        let val;
+        if (type === 'f1') val = (minDist * 2.0) - 1.0;
+        else if (type === 'f2') val = (secondMinDist * 1.6) - 1.0;
+        else if (type === 'f1+f2') val = ((minDist + secondMinDist) * 1.1) - 1.0;
+        else val = ((secondMinDist - minDist) * 2.8) - 1.0; // 'f2-f1'
+        return Math.max(-1, Math.min(1, val));
+    }
+
+    // --- Worley Noise 2D (5x5 neighborhood prevents F2/F2-F1 boundary clipping) ---
     worley(x, y, type, metric) {
         const xInt = Math.floor(x);
         const yInt = Math.floor(y);
@@ -344,22 +386,15 @@ class NoiseGenerator {
         let minDist = 100;
         let secondMinDist = 100;
 
-        for (let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for (let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
+        for (let yNeighbor = -2; yNeighbor <= 2; yNeighbor++) {
+            for (let xNeighbor = -2; xNeighbor <= 2; xNeighbor++) {
                 const neighborX = xInt + xNeighbor;
                 const neighborY = yInt + yNeighbor;
-                let hash1 = Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.seed) * 43758.5453;
-                hash1 = hash1 - Math.floor(hash1);
-                const pointX = xNeighbor + hash1;
 
-                let hash2 = Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.seed) * 23421.6543;
-                hash2 = hash2 - Math.floor(hash2);
-                const pointY = yNeighbor + hash2;
+                const pointX = xNeighbor + this.cellHash(neighborX, neighborY, 1);
+                const pointY = yNeighbor + this.cellHash(neighborX, neighborY, 2);
 
-                const diffX = pointX - xFrac;
-                const diffY = pointY - yFrac;
-                const d = this.computeDistance(diffX, diffY, metric);
-
+                const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
                 if (d < minDist) {
                     secondMinDist = minDist;
                     minDist = d;
@@ -368,11 +403,7 @@ class NoiseGenerator {
                 }
             }
         }
-
-        if (type === 'f1') return (minDist * 2) - 1;
-        if (type === 'f2') return (secondMinDist * 2) - 1;
-        if (type === 'f1+f2') return ((minDist + secondMinDist) * 1.5) - 1;
-        return ((secondMinDist - minDist) * 4) - 1; // 'f2-f1'
+        return this.formatWorleyOutput(minDist, secondMinDist, type);
     }
 
     // --- Worley Seamless Tiling (Geometric Toroidal Cell Wrap) ---
@@ -384,26 +415,18 @@ class NoiseGenerator {
         let minDist = 100;
         let secondMinDist = 100;
 
-        for (let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for (let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
+        for (let yNeighbor = -2; yNeighbor <= 2; yNeighbor++) {
+            for (let xNeighbor = -2; xNeighbor <= 2; xNeighbor++) {
                 const neighborX = xInt + xNeighbor;
                 const neighborY = yInt + yNeighbor;
 
                 const wrappedX = ((neighborX % periodX) + periodX) % periodX;
                 const wrappedY = ((neighborY % periodY) + periodY) % periodY;
 
-                let hash1 = Math.sin(wrappedX * 12.9898 + wrappedY * 78.233 + this.seed) * 43758.5453;
-                hash1 = hash1 - Math.floor(hash1);
-                const pointX = xNeighbor + hash1;
+                const pointX = xNeighbor + this.cellHash(wrappedX, wrappedY, 1);
+                const pointY = yNeighbor + this.cellHash(wrappedX, wrappedY, 2);
 
-                let hash2 = Math.sin(wrappedX * 98.233 + wrappedY * 12.9898 + this.seed) * 23421.6543;
-                hash2 = hash2 - Math.floor(hash2);
-                const pointY = yNeighbor + hash2;
-
-                const diffX = pointX - xFrac;
-                const diffY = pointY - yFrac;
-                const d = this.computeDistance(diffX, diffY, metric);
-
+                const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
                 if (d < minDist) {
                     secondMinDist = minDist;
                     minDist = d;
@@ -412,11 +435,41 @@ class NoiseGenerator {
                 }
             }
         }
+        return this.formatWorleyOutput(minDist, secondMinDist, type);
+    }
 
-        if (type === 'f1') return (minDist * 2) - 1;
-        if (type === 'f2') return (secondMinDist * 2) - 1;
-        if (type === 'f1+f2') return ((minDist + secondMinDist) * 1.5) - 1;
-        return ((secondMinDist - minDist) * 4) - 1;
+    // --- Procedural Brick / Architectural Tile Pattern ---
+    brickPattern(u, v, cols, rows, detailNoise) {
+        const c = Math.max(1, Math.round(cols));
+        const r = Math.max(2, Math.round(rows / 2) * 2); // Even row count guarantees vertical wrap
+        const gy = v * r;
+        const rowIdx = Math.floor(gy);
+        const fy = gy - rowIdx;
+
+        const stagger = (rowIdx & 1) * 0.5;
+        const gx = u * c + stagger;
+        const colIdx = Math.floor(gx);
+        const fx = gx - colIdx;
+
+        const wrappedCol = ((colIdx % c) + c) % c;
+        const wrappedRow = ((rowIdx % r) + r) % r;
+        const brickTint = (this.cellHash(wrappedCol, wrappedRow, 7) - 0.5) * 0.35;
+
+        const mortarW = 0.06;
+        const mortarH = 0.10;
+        const bevelW = 0.08;
+        const bevelH = 0.14;
+
+        const dx = Math.min(fx, 1.0 - fx);
+        const dy = Math.min(fy, 1.0 - fy);
+
+        const ex = Math.max(0, Math.min(1, (dx - mortarW) / bevelW));
+        const ey = Math.max(0, Math.min(1, (dy - mortarH) / bevelH));
+        const mask = fade(Math.min(ex, ey));
+
+        const mortarLevel = -0.85 + detailNoise * 0.15;
+        const brickLevel = 0.45 + brickTint + detailNoise * 0.35;
+        return Math.max(-1, Math.min(1, lerp(mortarLevel, brickLevel, mask)));
     }
 }
 
@@ -498,147 +551,213 @@ function createGradientLUT(gradientStops, lutSize = 1024) {
     return lut;
 }
 
-// 4. WORKER MESSAGE HANDLER
-self.onmessage = function(e) {
-    if (e.data && e.data.type === 'RENDER_CHUNK') {
-        const {
-            startY, endY, width, height, seed, noiseType, scale, octaves,
-            persistence, lacunarity, ridged, turbStrength, turbScale,
-            worleyType, worleyDist, contrast, brightness, invert,
-            thresholdEnable, threshold, seamless, gradientStops
-        } = e.data;
+// 4. CORE CHUNK SYNTHESIS FUNCTION
+function renderNoiseChunk(params) {
+    const {
+        renderId, startY, endY, width, height, noiseType,
+        worleyType, worleyDist, ridged, invert,
+        thresholdEnable, seamless, gradientStops
+    } = params;
 
-        const noiseGen = new NoiseGenerator(seed);
-        const turbGen = new NoiseGenerator(seed + 9999);
+    const seed = parseNumericSeed(params.seed);
+    const scale = Math.max(1, numOrDefault(params.scale, 50));
+    const octaves = Math.max(1, Math.min(12, Math.round(numOrDefault(params.octaves, 4))));
+    const persistence = numOrDefault(params.persistence, 0.5);
+    const lacunarity = numOrDefault(params.lacunarity, 2.0);
+    const turbStrength = numOrDefault(params.turbStrength, 0);
+    const turbScale = Math.max(1, numOrDefault(params.turbScale, 50));
+    const contrast = numOrDefault(params.contrast, 1.0);
+    const brightness = numOrDefault(params.brightness, 0.0);
+    const threshold = numOrDefault(params.threshold, 0.5);
 
-        const LUT_SIZE = 1024;
-        const gradientLUT = createGradientLUT(gradientStops, LUT_SIZE);
+    const noiseGen = new NoiseGenerator(seed);
+    const turbGen = new NoiseGenerator((seed + 9999) >>> 0);
 
-        const chunkHeight = Math.max(0, endY - startY);
-        const chunkData = new Uint8ClampedArray(width * chunkHeight * 4);
-        const heightData = new Float32Array(width * chunkHeight);
+    const LUT_SIZE = 1024;
+    const gradientLUT = createGradientLUT(gradientStops, LUT_SIZE);
 
-        const safeScale = Math.max(1, scale);
-        const safeTurbScale = Math.max(1, turbScale);
-        const twoPi = 2 * Math.PI;
+    const chunkHeight = Math.max(0, endY - startY);
+    const chunkData = new Uint8ClampedArray(width * chunkHeight * 4);
+    const heightData = new Float32Array(width * chunkHeight);
 
-        for (let y = startY; y < endY; y++) {
-            const localY = y - startY;
-            for (let x = 0; x < width; x++) {
-                let u = x / width;
-                let v = y / height;
+    const twoPi = 2 * Math.PI;
+    // Scale-consistent toroidal radii: arc length 2*pi*R matches width/scale & height/scale
+    const cyclesX = Math.max(0.25, width / scale);
+    const cyclesY = Math.max(0.25, height / scale);
+    const Rx = cyclesX / twoPi;
+    const Ry = cyclesY / twoPi;
 
-                let nx = x;
-                let ny = y;
+    const turbCyclesX = Math.max(0.25, width / turbScale);
+    const turbCyclesY = Math.max(0.25, height / turbScale);
+    const turbRx = turbCyclesX / twoPi;
+    const turbRy = turbCyclesY / twoPi;
 
-                // Turbulence / Domain Warping
-                if (turbStrength > 0) {
-                    let tx, ty;
-                    if (seamless) {
-                        const turbR = safeTurbScale / twoPi;
-                        const tnx = Math.cos(twoPi * u) * turbR;
-                        const tny = Math.sin(twoPi * u) * turbR;
-                        const tnz = Math.cos(twoPi * v) * turbR;
-                        const tnw = Math.sin(twoPi * v) * turbR;
+    for (let y = startY; y < endY; y++) {
+        const localY = y - startY;
+        for (let x = 0; x < width; x++) {
+            let u = x / width;
+            let v = y / height;
+            let nx = x;
+            let ny = y;
 
-                        tx = turbGen.simplex4d(tnx, tny, tnz, tnw);
-                        ty = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
-                    } else {
-                        tx = turbGen.simplex2d(x / safeTurbScale, y / safeTurbScale);
-                        ty = turbGen.simplex2d((x + 1000) / safeTurbScale, (y + 1000) / safeTurbScale);
-                    }
-                    nx += tx * turbStrength;
-                    ny += ty * turbStrength;
-
-                    u = nx / width;
-                    v = ny / height;
-                }
-
-                let noiseValue = 0;
-                let maxValue = 0;
-
+            // Turbulence / Domain Warping
+            if (turbStrength > 0) {
+                let wx, wy;
                 if (seamless) {
-                    if (noiseType === 'simplex') {
-                        const R = safeScale / twoPi;
-                        const tx = Math.cos(twoPi * u) * R;
-                        const ty = Math.sin(twoPi * u) * R;
-                        const tz = Math.cos(twoPi * v) * R;
-                        const tw = Math.sin(twoPi * v) * R;
+                    const tnx = Math.cos(twoPi * u) * turbRx;
+                    const tny = Math.sin(twoPi * u) * turbRx;
+                    const tnz = Math.cos(twoPi * v) * turbRy;
+                    const tnw = Math.sin(twoPi * v) * turbRy;
 
-                        let amplitude = 1;
-                        let freq = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            let n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            freq *= lacunarity;
-                        }
-                    } else if (noiseType === 'perlin') {
-                        const R = safeScale / twoPi;
-                        const tx = Math.cos(twoPi * u) * R;
-                        const ty = Math.sin(twoPi * u) * R;
-                        const tz = Math.cos(twoPi * v) * R;
-                        const tw = Math.sin(twoPi * v) * R;
-
-                        let amplitude = 1;
-                        let freq = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            let n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            freq *= lacunarity;
-                        }
-                    } else if (noiseType === 'value') {
-                        const R = safeScale / twoPi;
-                        const tx = Math.cos(twoPi * u) * R;
-                        const ty = Math.sin(twoPi * u) * R;
-                        const tz = Math.cos(twoPi * v) * R;
-                        const tw = Math.sin(twoPi * v) * R;
-
-                        let amplitude = 1;
-                        let freq = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            let n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            freq *= lacunarity;
-                        }
-                    } else {
-                        // Seamless Worley
-                        let periodX = Math.max(1, Math.round(width / safeScale));
-                        let periodY = Math.max(1, Math.round(height / safeScale));
-
-                        let amplitude = 1;
-                        let freqMult = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            const pX = Math.max(1, Math.round(periodX * freqMult));
-                            const pY = Math.max(1, Math.round(periodY * freqMult));
-                            const xScaled = u * pX;
-                            const yScaled = v * pY;
-
-                            let n = noiseGen.worleySeamless(xScaled, yScaled, pX, pY, worleyType, worleyDist);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude;
-                            maxValue += amplitude;
-                            amplitude *= persistence;
-                            freqMult *= lacunarity;
-                        }
-                    }
+                    wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
+                    wy = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
                 } else {
-                    // Non-Seamless Standard
+                    wx = turbGen.simplex2d(x / turbScale, y / turbScale);
+                    wy = turbGen.simplex2d((x + 1000) / turbScale, (y + 1000) / turbScale);
+                }
+                nx += wx * turbStrength;
+                ny += wy * turbStrength;
+                u = nx / width;
+                v = ny / height;
+            }
+
+            let noiseValue = 0;
+            let maxValue = 0;
+
+            if (seamless) {
+                const tx = Math.cos(twoPi * u) * Rx;
+                const ty = Math.sin(twoPi * u) * Rx;
+                const tz = Math.cos(twoPi * v) * Ry;
+                const tw = Math.sin(twoPi * v) * Ry;
+
+                if (noiseType === 'simplex' || noiseType === 'perlin' || noiseType === 'value') {
                     let amplitude = 1;
                     let freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        const sx = (nx / safeScale) * freq;
-                        const sy = (ny / safeScale) * freq;
                         let n;
+                        if (noiseType === 'simplex') n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
+                        else if (noiseType === 'perlin') n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
+                        else n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
 
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude;
+                        maxValue += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                } else if (noiseType === 'waves') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq) * amplitude;
+                        fbmMax += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    const waveCyclesX = Math.max(1, Math.round(cyclesX));
+                    const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
+                    let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 1.75));
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n;
+                    maxValue = 1;
+                } else if (noiseType === 'caustics') {
+                    let amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq));
+                        const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq, (tw + 3.7) * freq, (tx - 2.3) * freq, (ty - 2.3) * freq));
+                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude;
+                        maxValue += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                } else if (noiseType === 'brick') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex4d(tx * freq * 2, ty * freq * 2, tz * freq * 2, tw * freq * 2) * amplitude;
+                        fbmMax += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    const cols = Math.max(2, Math.round(width / scale));
+                    const rows = Math.max(4, Math.round((height / scale) * 2));
+                    let n = noiseGen.brickPattern(((u % 1) + 1) % 1, ((v % 1) + 1) % 1, cols, rows, fbm);
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n;
+                    maxValue = 1;
+                } else {
+                    // Seamless Worley
+                    const periodX = Math.max(1, Math.round(width / scale));
+                    const periodY = Math.max(1, Math.round(height / scale));
+                    let amplitude = 1;
+                    let freqMult = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const pX = Math.max(1, Math.round(periodX * freqMult));
+                        const pY = Math.max(1, Math.round(periodY * freqMult));
+                        let n = noiseGen.worleySeamless(u * pX, v * pY, pX, pY, worleyType, worleyDist);
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude;
+                        maxValue += amplitude;
+                        amplitude *= persistence;
+                        freqMult *= lacunarity;
+                    }
+                }
+            } else {
+                // Non-Seamless Standard 2D
+                const baseSx = nx / scale;
+                const baseSy = ny / scale;
+
+                if (noiseType === 'waves') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex2d(baseSx * freq, baseSy * freq) * amplitude;
+                        fbmMax += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n;
+                    maxValue = 1;
+                } else if (noiseType === 'caustics') {
+                    let amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const sx = baseSx * freq;
+                        const sy = baseSy * freq;
+                        const n1 = 1.0 - Math.abs(noiseGen.simplex2d(sx, sy));
+                        const n2 = 1.0 - Math.abs(noiseGen.simplex2d(sy + 17.3, sx - 11.7));
+                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude;
+                        maxValue += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                } else if (noiseType === 'brick') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex2d(baseSx * freq * 2, baseSy * freq * 2) * amplitude;
+                        fbmMax += amplitude;
+                        amplitude *= persistence;
+                        freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    const cols = Math.max(2, Math.round(width / scale));
+                    const rows = Math.max(4, Math.round((height / scale) * 2));
+                    let n = noiseGen.brickPattern(u, v, cols, rows, fbm);
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n;
+                    maxValue = 1;
+                } else {
+                    let amplitude = 1;
+                    let freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const sx = baseSx * freq;
+                        const sy = baseSy * freq;
+                        let n;
                         if (noiseType === 'simplex') n = noiseGen.simplex2d(sx, sy);
                         else if (noiseType === 'perlin') n = noiseGen.perlin(sx, sy);
                         else if (noiseType === 'value') n = noiseGen.value(sx, sy);
@@ -651,45 +770,50 @@ self.onmessage = function(e) {
                         freq *= lacunarity;
                     }
                 }
-
-                if (maxValue > 0) {
-                    if (ridged) {
-                        noiseValue = noiseValue / maxValue;
-                    } else {
-                        noiseValue = (noiseValue / maxValue + 1) * 0.5;
-                    }
-                } else {
-                    noiseValue = 0.5;
-                }
-
-                // Post-Processing
-                if (invert) noiseValue = 1.0 - noiseValue;
-                noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
-                noiseValue = Math.max(0, Math.min(1, noiseValue));
-                if (thresholdEnable) noiseValue = noiseValue >= threshold ? 1.0 : 0.0;
-
-                // Store height for PBR normal/roughness generation
-                const pixelIdx = localY * width + x;
-                heightData[pixelIdx] = noiseValue;
-
-                // Lookup color in LUT
-                const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.floor(noiseValue * (LUT_SIZE - 1))));
-                const colorOffset = lutIdx * 4;
-                const outOffset = pixelIdx * 4;
-
-                chunkData[outOffset]     = gradientLUT[colorOffset];
-                chunkData[outOffset + 1] = gradientLUT[colorOffset + 1];
-                chunkData[outOffset + 2] = gradientLUT[colorOffset + 2];
-                chunkData[outOffset + 3] = 255;
             }
-        }
 
-        self.postMessage({
-            type: 'CHUNK_COMPLETE',
-            data: chunkData,
-            heightData: heightData,
-            startY: startY,
-            endY: endY
-        }, [chunkData.buffer, heightData.buffer]);
+            if (maxValue > 0) {
+                noiseValue = ridged ? (noiseValue / maxValue) : ((noiseValue / maxValue + 1.0) * 0.5);
+            } else {
+                noiseValue = 0.5;
+            }
+
+            // Post-Processing
+            if (invert) noiseValue = 1.0 - noiseValue;
+            noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
+            noiseValue = Math.max(0, Math.min(1, noiseValue));
+            if (thresholdEnable) noiseValue = noiseValue >= threshold ? 1.0 : 0.0;
+
+            // Store height for PBR normal/roughness/metallic/AO generation
+            const pixelIdx = localY * width + x;
+            heightData[pixelIdx] = noiseValue;
+
+            // Lookup color in LUT
+            const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.round(noiseValue * (LUT_SIZE - 1))));
+            const colorOffset = lutIdx * 4;
+            const outOffset = pixelIdx * 4;
+
+            chunkData[outOffset]     = gradientLUT[colorOffset];
+            chunkData[outOffset + 1] = gradientLUT[colorOffset + 1];
+            chunkData[outOffset + 2] = gradientLUT[colorOffset + 2];
+            chunkData[outOffset + 3] = 255;
+        }
+    }
+
+    return {
+        type: 'CHUNK_COMPLETE',
+        renderId: renderId,
+        data: chunkData,
+        heightData: heightData,
+        startY: startY,
+        endY: endY
+    };
+}
+
+// 5. WORKER MESSAGE HANDLER
+self.onmessage = function(e) {
+    if (e.data && e.data.type === 'RENDER_CHUNK') {
+        const result = renderNoiseChunk(e.data);
+        self.postMessage(result, [result.data.buffer, result.heightData.buffer]);
     }
 };

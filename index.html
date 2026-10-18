@@ -12,6 +12,7 @@
         :root {
             --color-bg: #0f1115;
             --color-surface: #171922;
+            --color-surface-alt: #141720;
             --color-surface-hover: #1f232f;
             --color-surface-active: #272c3b;
             --color-surface-header: #1d212c;
@@ -634,7 +635,6 @@
             color: var(--color-success);
             display: none;
             margin-bottom: var(--space-2);
-            display: flex;
             align-items: center;
             gap: 4px;
         }
@@ -754,7 +754,7 @@
                 </summary>
                 <div class="control-group">
                     <p style="font-size: 0.76rem; color: var(--color-text-secondary); margin-top: 0; line-height: 1.4;">
-                        Upload an external texture to process or derive Normal, Roughness, and Height maps.
+                        Upload an external texture to process or derive Normal, Roughness, Metallic, AO, and Height maps.
                     </p>
                     <input type="file" id="imageInput" accept="image/*" aria-label="Upload custom texture image">
                     
@@ -765,7 +765,12 @@
                     
                     <div class="checkbox-row">
                         <input type="checkbox" id="seamlessBlendUpload">
-                        <label for="seamlessBlendUpload">Enable seamless mirror edge blend</label>
+                        <label for="seamlessBlendUpload">Enable seamless opposite-edge blend</label>
+                    </div>
+
+                    <div class="checkbox-row">
+                        <input type="checkbox" id="remapUploadGradient">
+                        <label for="remapUploadGradient">Map color gradient to image luminance</label>
                     </div>
 
                     <button type="button" class="action-btn btn-clear" id="clearImageBtn" style="width: 100%; margin-top: 6px;">Clear Image / Return to Procedural</button>
@@ -786,6 +791,7 @@
                         <option value="lava">Molten Lava (6 Colors)</option>
                         <option value="wood">Wood Grain (5 Colors)</option>
                         <option value="water">Ocean Water (5 Colors)</option>
+                        <option value="caustics">Underwater Caustics (5 Colors)</option>
                         <option value="clouds">Sky Clouds (5 Colors)</option>
                         <option value="rust">Corroded Metal (6 Colors)</option>
                         <option value="cells">Alien Cells (6 Colors)</option>
@@ -793,6 +799,7 @@
                         <option value="cyberpunk">Cyberpunk Grid (5 Colors)</option>
                         <option value="gold">Gold & Bronze (5 Colors)</option>
                         <option value="marble">White Veined Marble (5 Colors)</option>
+                        <option value="brickwall">Weathered Brick Wall (5 Colors)</option>
                         <option value="sand">Desert Sand Dunes (5 Colors)</option>
                         <option value="plasma">Electric Plasma (5 Colors)</option>
                         <option value="leather">Fine Leather (5 Colors)</option>
@@ -856,6 +863,9 @@
                         <option value="perlin" selected>Perlin Noise (Classic Natural)</option>
                         <option value="value">Value Noise (Blocky Organic)</option>
                         <option value="worley">Worley (Cellular / Voronoi)</option>
+                        <option value="waves">Sine Waves (Wood & Marble Veins)</option>
+                        <option value="caustics">Optical Caustics (Water Light)</option>
+                        <option value="brick">Procedural Bricks & Mortar</option>
                     </select>
 
                     <label for="scale">Scale: <span class="val" id="scaleVal">50</span></label>
@@ -1073,6 +1083,7 @@
                             <option value="normal">Normal Map</option>
                             <option value="height">Height Map</option>
                             <option value="roughness">Roughness Map</option>
+                            <option value="metallic">Metallic Map</option>
                             <option value="ao">Ambient Occlusion</option>
                         </select>
 
@@ -1141,6 +1152,7 @@
                             <button type="button" class="channel-pill" data-map="normal" role="tab" aria-selected="false">Normal</button>
                             <button type="button" class="channel-pill" data-map="height" role="tab" aria-selected="false">Height</button>
                             <button type="button" class="channel-pill" data-map="roughness" role="tab" aria-selected="false">Roughness</button>
+                            <button type="button" class="channel-pill" data-map="metallic" role="tab" aria-selected="false">Metallic</button>
                             <button type="button" class="channel-pill" data-map="ao" role="tab" aria-selected="false">Ambient Occlusion</button>
                         </div>
                     </div>
@@ -1164,12 +1176,24 @@
 
 <script>
 /**
- * INLINED PROCEDURAL NOISE WORKER SCRIPT
- * Synchronized with noiseWorker.js for zero-CORS local & remote execution.
+ * SHARED & INLINED PROCEDURAL NOISE WORKER ENGINE
+ * 100% synchronized with noiseWorker.js for zero-CORS local, remote, and main-thread fallback execution.
  */
 const inlineWorkerSource = `
+function parseNumericSeed(seed) {
+    if (seed !== undefined && seed !== null && seed !== '' && !Number.isNaN(Number(seed))) {
+        return Number(seed) >>> 0;
+    }
+    return 12345;
+}
+
+function numOrDefault(val, fallback) {
+    const n = Number(val);
+    return (val !== undefined && val !== null && val !== '' && Number.isFinite(n)) ? n : fallback;
+}
+
 class SeededRandom {
-    constructor(seed) { this.seed = (Number(seed) || 12345) >>> 0; }
+    constructor(seed) { this.seed = parseNumericSeed(seed); }
     next() {
         let t = (this.seed = (this.seed + 0x6D2B79F5) >>> 0);
         t = Math.imul(t ^ (t >>> 15), t | 1);
@@ -1177,6 +1201,7 @@ class SeededRandom {
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
     }
 }
+
 const lerp = (a, b, t) => a + t * (b - a);
 const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
 const F2 = 0.5 * (Math.sqrt(3.0) - 1.0);
@@ -1193,7 +1218,7 @@ const grad4 = [
 
 class NoiseGenerator {
     constructor(seed) {
-        this.seed = (Number(seed) || 12345) >>> 0;
+        this.seed = parseNumericSeed(seed);
         this.prng = new SeededRandom(this.seed);
         this.p = new Uint8Array(256);
         for(let i=0; i<256; i++) this.p[i] = i;
@@ -1204,6 +1229,16 @@ class NoiseGenerator {
         this.perm = new Uint16Array(1024);
         for(let i=0; i<1024; i++) this.perm[i] = this.p[i & 255];
     }
+    cellHash(ix, iy, channel) {
+        let h = (
+            Math.imul(ix | 0, 374761393) +
+            Math.imul(iy | 0, 668265263) +
+            Math.imul(this.seed | 0, 1442695041) +
+            Math.imul(channel | 0, 2246822519)
+        ) | 0;
+        h = Math.imul(h ^ (h >>> 13), 1274126177);
+        return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+    }
     gradPerlin2D(hash, x, y) {
         const h = hash & 15;
         const u = h < 8 ? x : y;
@@ -1211,23 +1246,22 @@ class NoiseGenerator {
         return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
     }
     perlin(x, y) {
-        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
-        x -= Math.floor(x); y -= Math.floor(y);
-        const u = fade(x); const v = fade(y);
+        const xi = Math.floor(x); const yi = Math.floor(y);
+        const X = xi & 255; const Y = yi & 255;
+        const fx = x - xi; const fy = y - yi;
+        const u = fade(fx); const v = fade(fy);
         const perm = this.perm;
         const A = perm[X] + Y, AA = perm[A], AB = perm[A + 1];
         const B = perm[X + 1] + Y, BA = perm[B], BB = perm[B + 1];
-        return lerp(lerp(this.gradPerlin2D(perm[AA], x, y), this.gradPerlin2D(perm[BA], x - 1, y), u),
-                    lerp(this.gradPerlin2D(perm[AB], x, y - 1), this.gradPerlin2D(perm[BB], x - 1, y - 1), u), v);
+        return lerp(lerp(this.gradPerlin2D(perm[AA], fx, fy), this.gradPerlin2D(perm[BA], fx - 1, fy), u),
+                    lerp(this.gradPerlin2D(perm[AB], fx, fy - 1), this.gradPerlin2D(perm[BB], fx - 1, fy - 1), u), v);
     }
     perlin4d(x, y, z, w) {
-        const ix0 = Math.floor(x) & 255; const iy0 = Math.floor(y) & 255;
-        const iz0 = Math.floor(z) & 255; const iw0 = Math.floor(w) & 255;
-        const ix1 = (ix0 + 1) & 255; const iy1 = (iy0 + 1) & 255;
-        const iz1 = (iz0 + 1) & 255; const iw1 = (iw0 + 1) & 255;
-        const fx = x - Math.floor(x); const fy = y - Math.floor(y);
-        const fz = z - Math.floor(z); const fw = w - Math.floor(w);
-        const u = fade(fx); const v = fade(fy); const t = fade(fz); const s = fade(fw);
+        const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), wi = Math.floor(w);
+        const ix0 = xi & 255, iy0 = yi & 255, iz0 = zi & 255, iw0 = wi & 255;
+        const ix1 = (ix0 + 1) & 255, iy1 = (iy0 + 1) & 255, iz1 = (iz0 + 1) & 255, iw1 = (iw0 + 1) & 255;
+        const fx = x - xi, fy = y - yi, fz = z - zi, fw = w - wi;
+        const u = fade(fx), v = fade(fy), t = fade(fz), s = fade(fw);
         const perm = this.perm;
         const h0 = perm[ix0], h1 = perm[ix1];
         const h00 = perm[h0 + iy0], h10 = perm[h1 + iy0];
@@ -1259,19 +1293,19 @@ class NoiseGenerator {
         const n0001 = dot(h0001, fx, fy, fz, fw - 1);
         const n1001 = dot(h1001, fx - 1, fy, fz, fw - 1);
         const n0101 = dot(h0101, fx, fy - 1, fz, fw - 1);
-        const n1101 = dot(h1101, fx - 1, fy - 1, fz - 1, fw - 1);
+        const n1101 = dot(h1101, fx - 1, fy - 1, fz, fw - 1);
         const n0011 = dot(h0011, fx, fy, fz - 1, fw - 1);
         const n1011 = dot(h1011, fx - 1, fy, fz - 1, fw - 1);
         const n0111 = dot(h0111, fx, fy - 1, fz - 1, fw - 1);
         const n1111 = dot(h1111, fx - 1, fy - 1, fz - 1, fw - 1);
-        const x000 = lerp(n0000, n1000, u); const x100 = lerp(n0100, n1100, u);
-        const x010 = lerp(n0010, n1010, u); const x110 = lerp(n0110, n1110, u);
-        const x001 = lerp(n0001, n1001, u); const x101 = lerp(n0101, n1101, u);
-        const x011 = lerp(n0011, n1011, u); const x111 = lerp(n0111, n1111, u);
-        const y00 = lerp(x000, x100, v); const y10 = lerp(x010, x110, v);
-        const y01 = lerp(x001, x101, v); const y11 = lerp(x011, x111, v);
-        const z0 = lerp(y00, y10, t); const z1 = lerp(y01, y11, t);
-        return lerp(z0, z1, s);
+        const x000 = lerp(n0000, n1000, u), x100 = lerp(n0100, n1100, u);
+        const x010 = lerp(n0010, n1010, u), x110 = lerp(n0110, n1110, u);
+        const x001 = lerp(n0001, n1001, u), x101 = lerp(n0101, n1101, u);
+        const x011 = lerp(n0011, n1011, u), x111 = lerp(n0111, n1111, u);
+        const y00 = lerp(x000, x100, v), y10 = lerp(x010, x110, v);
+        const y01 = lerp(x001, x101, v), y11 = lerp(x011, x111, v);
+        const z0 = lerp(y00, y10, t), z1 = lerp(y01, y11, t);
+        return Math.max(-1, Math.min(1, lerp(z0, z1, s) * 1.45));
     }
     simplex2d(x, y) {
         const s = (x + y) * F2;
@@ -1338,9 +1372,10 @@ class NoiseGenerator {
         return 27.0 * (n0 + n1 + n2 + n3 + n4);
     }
     value(x, y) {
-        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
-        x -= Math.floor(x); y -= Math.floor(y);
-        const u = fade(x); const v = fade(y);
+        const xi = Math.floor(x), yi = Math.floor(y);
+        const X = xi & 255, Y = yi & 255;
+        const fx = x - xi, fy = y - yi;
+        const u = fade(fx), v = fade(fy);
         const perm = this.perm;
         const n00 = perm[X + perm[Y]] / 255;
         const n10 = perm[X + 1 + perm[Y]] / 255;
@@ -1349,10 +1384,9 @@ class NoiseGenerator {
         return (lerp(lerp(n00, n10, u), lerp(n01, n11, u), v) * 2) - 1;
     }
     value4d(x, y, z, w) {
-        const X = Math.floor(x) & 255; const Y = Math.floor(y) & 255;
-        const Z = Math.floor(z) & 255; const W = Math.floor(w) & 255;
-        const fx = x - Math.floor(x); const fy = y - Math.floor(y);
-        const fz = z - Math.floor(z); const fw = w - Math.floor(w);
+        const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z), wi = Math.floor(w);
+        const X = xi & 255, Y = yi & 255, Z = zi & 255, W = wi & 255;
+        const fx = x - xi, fy = y - yi, fz = z - zi, fw = w - wi;
         const u = fade(fx), v = fade(fy), t = fade(fz), s = fade(fw);
         const p = this.perm;
         const h0 = p[X], h1 = p[X + 1];
@@ -1364,7 +1398,7 @@ class NoiseGenerator {
         const c0010 = p[h001 + W] / 255, c1010 = p[h101 + W] / 255;
         const c0110 = p[h011 + W] / 255, c1110 = p[h111 + W] / 255;
         const c0001 = p[h000 + W + 1] / 255, c1001 = p[h100 + W + 1] / 255;
-        const c0101 = p[h010 + W + 1] / 255, c1101 = p[h100 + W + 1] / 255;
+        const c0101 = p[h010 + W + 1] / 255, c1101 = p[h110 + W + 1] / 255;
         const c0011 = p[h001 + W + 1] / 255, c1011 = p[h101 + W + 1] / 255;
         const c0111 = p[h011 + W + 1] / 255, c1111 = p[h111 + W + 1] / 255;
         const x000 = lerp(c0000, c1000, u), x100 = lerp(c0100, c1100, u);
@@ -1377,58 +1411,75 @@ class NoiseGenerator {
         return lerp(z0, z1, s) * 2 - 1;
     }
     computeDistance(dx, dy, metric) {
-        if (metric === 'manhattan') return Math.abs(dx) + Math.abs(dy);
+        if (metric === 'manhattan') return (Math.abs(dx) + Math.abs(dy)) * 0.75;
         if (metric === 'chebyshev') return Math.max(Math.abs(dx), Math.abs(dy));
-        if (metric === 'minkowski') { const s = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy)); return s * s; }
+        if (metric === 'minkowski') { const s = Math.sqrt(Math.abs(dx)) + Math.sqrt(Math.abs(dy)); return (s * s) * 0.5; }
         return Math.sqrt(dx * dx + dy * dy);
+    }
+    formatWorleyOutput(minDist, secondMinDist, type) {
+        let val;
+        if (type === 'f1') val = (minDist * 2.0) - 1.0;
+        else if (type === 'f2') val = (secondMinDist * 1.6) - 1.0;
+        else if (type === 'f1+f2') val = ((minDist + secondMinDist) * 1.1) - 1.0;
+        else val = ((secondMinDist - minDist) * 2.8) - 1.0;
+        return Math.max(-1, Math.min(1, val));
     }
     worley(x, y, type, metric) {
         const xInt = Math.floor(x); const yInt = Math.floor(y);
         const xFrac = x - xInt; const yFrac = y - yInt;
         let minDist = 100, secondMinDist = 100;
-        for (let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for (let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
+        for (let yNeighbor = -2; yNeighbor <= 2; yNeighbor++) {
+            for (let xNeighbor = -2; xNeighbor <= 2; xNeighbor++) {
                 const neighborX = xInt + xNeighbor; const neighborY = yInt + yNeighbor;
-                let hash1 = Math.sin(neighborX * 12.9898 + neighborY * 78.233 + this.seed) * 43758.5453;
-                hash1 = hash1 - Math.floor(hash1);
-                const pointX = xNeighbor + hash1;
-                let hash2 = Math.sin(neighborX * 98.233 + neighborY * 12.9898 + this.seed) * 23421.6543;
-                hash2 = hash2 - Math.floor(hash2);
-                const pointY = yNeighbor + hash2;
+                const pointX = xNeighbor + this.cellHash(neighborX, neighborY, 1);
+                const pointY = yNeighbor + this.cellHash(neighborX, neighborY, 2);
                 const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
                 if (d < minDist) { secondMinDist = minDist; minDist = d; }
                 else if (d < secondMinDist) { secondMinDist = d; }
             }
         }
-        if (type === 'f1') return (minDist * 2) - 1;
-        if (type === 'f2') return (secondMinDist * 2) - 1;
-        if (type === 'f1+f2') return ((minDist + secondMinDist) * 1.5) - 1;
-        return ((secondMinDist - minDist) * 4) - 1;
+        return this.formatWorleyOutput(minDist, secondMinDist, type);
     }
     worleySeamless(xScaled, yScaled, periodX, periodY, type, metric) {
         const xInt = Math.floor(xScaled); const yInt = Math.floor(yScaled);
         const xFrac = xScaled - xInt; const yFrac = yScaled - yInt;
         let minDist = 100, secondMinDist = 100;
-        for (let yNeighbor = -1; yNeighbor <= 1; yNeighbor++) {
-            for (let xNeighbor = -1; xNeighbor <= 1; xNeighbor++) {
+        for (let yNeighbor = -2; yNeighbor <= 2; yNeighbor++) {
+            for (let xNeighbor = -2; xNeighbor <= 2; xNeighbor++) {
                 const neighborX = xInt + xNeighbor; const neighborY = yInt + yNeighbor;
                 const wrappedX = ((neighborX % periodX) + periodX) % periodX;
                 const wrappedY = ((neighborY % periodY) + periodY) % periodY;
-                let hash1 = Math.sin(wrappedX * 12.9898 + wrappedY * 78.233 + this.seed) * 43758.5453;
-                hash1 = hash1 - Math.floor(hash1);
-                const pointX = xNeighbor + hash1;
-                let hash2 = Math.sin(wrappedX * 98.233 + wrappedY * 12.9898 + this.seed) * 23421.6543;
-                hash2 = hash2 - Math.floor(hash2);
-                const pointY = yNeighbor + hash2;
+                const pointX = xNeighbor + this.cellHash(wrappedX, wrappedY, 1);
+                const pointY = yNeighbor + this.cellHash(wrappedX, wrappedY, 2);
                 const d = this.computeDistance(pointX - xFrac, pointY - yFrac, metric);
                 if (d < minDist) { secondMinDist = minDist; minDist = d; }
                 else if (d < secondMinDist) { secondMinDist = d; }
             }
         }
-        if (type === 'f1') return (minDist * 2) - 1;
-        if (type === 'f2') return (secondMinDist * 2) - 1;
-        if (type === 'f1+f2') return ((minDist + secondMinDist) * 1.5) - 1;
-        return ((secondMinDist - minDist) * 4) - 1;
+        return this.formatWorleyOutput(minDist, secondMinDist, type);
+    }
+    brickPattern(u, v, cols, rows, detailNoise) {
+        const c = Math.max(1, Math.round(cols));
+        const r = Math.max(2, Math.round(rows / 2) * 2);
+        const gy = v * r;
+        const rowIdx = Math.floor(gy);
+        const fy = gy - rowIdx;
+        const stagger = (rowIdx & 1) * 0.5;
+        const gx = u * c + stagger;
+        const colIdx = Math.floor(gx);
+        const fx = gx - colIdx;
+        const wrappedCol = ((colIdx % c) + c) % c;
+        const wrappedRow = ((rowIdx % r) + r) % r;
+        const brickTint = (this.cellHash(wrappedCol, wrappedRow, 7) - 0.5) * 0.35;
+        const mortarW = 0.06, mortarH = 0.10, bevelW = 0.08, bevelH = 0.14;
+        const dx = Math.min(fx, 1.0 - fx);
+        const dy = Math.min(fy, 1.0 - fy);
+        const ex = Math.max(0, Math.min(1, (dx - mortarW) / bevelW));
+        const ey = Math.max(0, Math.min(1, (dy - mortarH) / bevelH));
+        const mask = fade(Math.min(ex, ey));
+        const mortarLevel = -0.85 + detailNoise * 0.15;
+        const brickLevel = 0.45 + brickTint + detailNoise * 0.35;
+        return Math.max(-1, Math.min(1, lerp(mortarLevel, brickLevel, mask)));
     }
 }
 
@@ -1498,111 +1549,179 @@ function createGradientLUT(gradientStops, lutSize = 1024) {
     return lut;
 }
 
-self.onmessage = function(e) {
-    if (e.data && e.data.type === 'RENDER_CHUNK') {
-        const {
-            startY, endY, width, height, seed, noiseType, scale, octaves,
-            persistence, lacunarity, ridged, turbStrength, turbScale,
-            worleyType, worleyDist, contrast, brightness, invert,
-            thresholdEnable, threshold, seamless, gradientStops
-        } = e.data;
+function renderNoiseChunk(params) {
+    const {
+        renderId, startY, endY, width, height, noiseType,
+        worleyType, worleyDist, ridged, invert,
+        thresholdEnable, seamless, gradientStops
+    } = params;
 
-        const noiseGen = new NoiseGenerator(seed);
-        const turbGen = new NoiseGenerator(seed + 9999);
-        const LUT_SIZE = 1024;
-        const gradientLUT = createGradientLUT(gradientStops, LUT_SIZE);
+    const seed = parseNumericSeed(params.seed);
+    const scale = Math.max(1, numOrDefault(params.scale, 50));
+    const octaves = Math.max(1, Math.min(12, Math.round(numOrDefault(params.octaves, 4))));
+    const persistence = numOrDefault(params.persistence, 0.5);
+    const lacunarity = numOrDefault(params.lacunarity, 2.0);
+    const turbStrength = numOrDefault(params.turbStrength, 0);
+    const turbScale = Math.max(1, numOrDefault(params.turbScale, 50));
+    const contrast = numOrDefault(params.contrast, 1.0);
+    const brightness = numOrDefault(params.brightness, 0.0);
+    const threshold = numOrDefault(params.threshold, 0.5);
 
-        const chunkHeight = Math.max(0, endY - startY);
-        const chunkData = new Uint8ClampedArray(width * chunkHeight * 4);
-        const heightData = new Float32Array(width * chunkHeight);
+    const noiseGen = new NoiseGenerator(seed);
+    const turbGen = new NoiseGenerator((seed + 9999) >>> 0);
+    const LUT_SIZE = 1024;
+    const gradientLUT = createGradientLUT(gradientStops, LUT_SIZE);
 
-        const safeScale = Math.max(1, scale);
-        const safeTurbScale = Math.max(1, turbScale);
-        const twoPi = 2 * Math.PI;
+    const chunkHeight = Math.max(0, endY - startY);
+    const chunkData = new Uint8ClampedArray(width * chunkHeight * 4);
+    const heightData = new Float32Array(width * chunkHeight);
 
-        for (let y = startY; y < endY; y++) {
-            const localY = y - startY;
-            for (let x = 0; x < width; x++) {
-                let u = x / width;
-                let v = y / height;
-                let nx = x;
-                let ny = y;
+    const twoPi = 2 * Math.PI;
+    const cyclesX = Math.max(0.25, width / scale);
+    const cyclesY = Math.max(0.25, height / scale);
+    const Rx = cyclesX / twoPi;
+    const Ry = cyclesY / twoPi;
 
-                if (turbStrength > 0) {
-                    let tx, ty;
-                    if (seamless) {
-                        const turbR = safeTurbScale / twoPi;
-                        const tnx = Math.cos(twoPi * u) * turbR;
-                        const tny = Math.sin(twoPi * u) * turbR;
-                        const tnz = Math.cos(twoPi * v) * turbR;
-                        const tnw = Math.sin(twoPi * v) * turbR;
-                        tx = turbGen.simplex4d(tnx, tny, tnz, tnw);
-                        ty = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
-                    } else {
-                        tx = turbGen.simplex2d(x / safeTurbScale, y / safeTurbScale);
-                        ty = turbGen.simplex2d((x + 1000) / safeTurbScale, (y + 1000) / safeTurbScale);
-                    }
-                    nx += tx * turbStrength;
-                    ny += ty * turbStrength;
-                    u = nx / width;
-                    v = ny / height;
-                }
+    const turbCyclesX = Math.max(0.25, width / turbScale);
+    const turbCyclesY = Math.max(0.25, height / turbScale);
+    const turbRx = turbCyclesX / twoPi;
+    const turbRy = turbCyclesY / twoPi;
 
-                let noiseValue = 0;
-                let maxValue = 0;
+    for (let y = startY; y < endY; y++) {
+        const localY = y - startY;
+        for (let x = 0; x < width; x++) {
+            let u = x / width;
+            let v = y / height;
+            let nx = x;
+            let ny = y;
 
+            if (turbStrength > 0) {
+                let wx, wy;
                 if (seamless) {
-                    if (noiseType === 'simplex') {
-                        const R = safeScale / twoPi;
-                        const tx = Math.cos(twoPi * u) * R; const ty = Math.sin(twoPi * u) * R;
-                        const tz = Math.cos(twoPi * v) * R; const tw = Math.sin(twoPi * v) * R;
-                        let amplitude = 1; let freq = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            let n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude; maxValue += amplitude;
-                            amplitude *= persistence; freq *= lacunarity;
-                        }
-                    } else if (noiseType === 'perlin') {
-                        const R = safeScale / twoPi;
-                        const tx = Math.cos(twoPi * u) * R; const ty = Math.sin(twoPi * u) * R;
-                        const tz = Math.cos(twoPi * v) * R; const tw = Math.sin(twoPi * v) * R;
-                        let amplitude = 1; let freq = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            let n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude; maxValue += amplitude;
-                            amplitude *= persistence; freq *= lacunarity;
-                        }
-                    } else if (noiseType === 'value') {
-                        const R = safeScale / twoPi;
-                        const tx = Math.cos(twoPi * u) * R; const ty = Math.sin(twoPi * u) * R;
-                        const tz = Math.cos(twoPi * v) * R; const tw = Math.sin(twoPi * v) * R;
-                        let amplitude = 1; let freq = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            let n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude; maxValue += amplitude;
-                            amplitude *= persistence; freq *= lacunarity;
-                        }
-                    } else {
-                        let periodX = Math.max(1, Math.round(width / safeScale));
-                        let periodY = Math.max(1, Math.round(height / safeScale));
-                        let amplitude = 1; let freqMult = 1;
-                        for (let o = 0; o < octaves; o++) {
-                            const pX = Math.max(1, Math.round(periodX * freqMult));
-                            const pY = Math.max(1, Math.round(periodY * freqMult));
-                            let n = noiseGen.worleySeamless(u * pX, v * pY, pX, pY, worleyType, worleyDist);
-                            if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
-                            noiseValue += n * amplitude; maxValue += amplitude;
-                            amplitude *= persistence; freqMult *= lacunarity;
-                        }
-                    }
+                    const tnx = Math.cos(twoPi * u) * turbRx;
+                    const tny = Math.sin(twoPi * u) * turbRx;
+                    const tnz = Math.cos(twoPi * v) * turbRy;
+                    const tnw = Math.sin(twoPi * v) * turbRy;
+                    wx = turbGen.simplex4d(tnx, tny, tnz, tnw);
+                    wy = turbGen.simplex4d(tnx + 10.5, tny + 10.5, tnz + 10.5, tnw + 10.5);
                 } else {
-                    let amplitude = 1; let freq = 1;
+                    wx = turbGen.simplex2d(x / turbScale, y / turbScale);
+                    wy = turbGen.simplex2d((x + 1000) / turbScale, (y + 1000) / turbScale);
+                }
+                nx += wx * turbStrength;
+                ny += wy * turbStrength;
+                u = nx / width;
+                v = ny / height;
+            }
+
+            let noiseValue = 0;
+            let maxValue = 0;
+
+            if (seamless) {
+                const tx = Math.cos(twoPi * u) * Rx;
+                const ty = Math.sin(twoPi * u) * Rx;
+                const tz = Math.cos(twoPi * v) * Ry;
+                const tw = Math.sin(twoPi * v) * Ry;
+
+                if (noiseType === 'simplex' || noiseType === 'perlin' || noiseType === 'value') {
+                    let amplitude = 1, freq = 1;
                     for (let o = 0; o < octaves; o++) {
-                        const sx = (nx / safeScale) * freq;
-                        const sy = (ny / safeScale) * freq;
+                        let n;
+                        if (noiseType === 'simplex') n = noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq);
+                        else if (noiseType === 'perlin') n = noiseGen.perlin4d(tx * freq, ty * freq, tz * freq, tw * freq);
+                        else n = noiseGen.value4d(tx * freq, ty * freq, tz * freq, tw * freq);
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude; maxValue += amplitude;
+                        amplitude *= persistence; freq *= lacunarity;
+                    }
+                } else if (noiseType === 'waves') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq) * amplitude;
+                        fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    const waveCyclesX = Math.max(1, Math.round(cyclesX));
+                    const waveCyclesY = Math.max(1, Math.round(cyclesY * 0.5));
+                    let n = Math.sin(twoPi * (u * waveCyclesX + v * waveCyclesY + fbm * 1.75));
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n; maxValue = 1;
+                } else if (noiseType === 'caustics') {
+                    let amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const n1 = 1.0 - Math.abs(noiseGen.simplex4d(tx * freq, ty * freq, tz * freq, tw * freq));
+                        const n2 = 1.0 - Math.abs(noiseGen.simplex4d((tz + 3.7) * freq, (tw + 3.7) * freq, (tx - 2.3) * freq, (ty - 2.3) * freq));
+                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude; maxValue += amplitude;
+                        amplitude *= persistence; freq *= lacunarity;
+                    }
+                } else if (noiseType === 'brick') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex4d(tx * freq * 2, ty * freq * 2, tz * freq * 2, tw * freq * 2) * amplitude;
+                        fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    const cols = Math.max(2, Math.round(width / scale));
+                    const rows = Math.max(4, Math.round((height / scale) * 2));
+                    let n = noiseGen.brickPattern(((u % 1) + 1) % 1, ((v % 1) + 1) % 1, cols, rows, fbm);
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n; maxValue = 1;
+                } else {
+                    const periodX = Math.max(1, Math.round(width / scale));
+                    const periodY = Math.max(1, Math.round(height / scale));
+                    let amplitude = 1, freqMult = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const pX = Math.max(1, Math.round(periodX * freqMult));
+                        const pY = Math.max(1, Math.round(periodY * freqMult));
+                        let n = noiseGen.worleySeamless(u * pX, v * pY, pX, pY, worleyType, worleyDist);
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude; maxValue += amplitude;
+                        amplitude *= persistence; freqMult *= lacunarity;
+                    }
+                }
+            } else {
+                const baseSx = nx / scale;
+                const baseSy = ny / scale;
+                if (noiseType === 'waves') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex2d(baseSx * freq, baseSy * freq) * amplitude;
+                        fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    let n = Math.sin(twoPi * (baseSx + baseSy * 0.5 + fbm * 1.75));
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n; maxValue = 1;
+                } else if (noiseType === 'caustics') {
+                    let amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const sx = baseSx * freq; const sy = baseSy * freq;
+                        const n1 = 1.0 - Math.abs(noiseGen.simplex2d(sx, sy));
+                        const n2 = 1.0 - Math.abs(noiseGen.simplex2d(sy + 17.3, sx - 11.7));
+                        let n = Math.pow(Math.max(0, (n1 + n2) * 0.5), 3.0) * 2.0 - 1.0;
+                        if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                        noiseValue += n * amplitude; maxValue += amplitude;
+                        amplitude *= persistence; freq *= lacunarity;
+                    }
+                } else if (noiseType === 'brick') {
+                    let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        fbm += noiseGen.simplex2d(baseSx * freq * 2, baseSy * freq * 2) * amplitude;
+                        fbmMax += amplitude; amplitude *= persistence; freq *= lacunarity;
+                    }
+                    if (fbmMax > 0) fbm /= fbmMax;
+                    const cols = Math.max(2, Math.round(width / scale));
+                    const rows = Math.max(4, Math.round((height / scale) * 2));
+                    let n = noiseGen.brickPattern(u, v, cols, rows, fbm);
+                    if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
+                    noiseValue = n; maxValue = 1;
+                } else {
+                    let amplitude = 1, freq = 1;
+                    for (let o = 0; o < octaves; o++) {
+                        const sx = baseSx * freq;
+                        const sy = baseSy * freq;
                         let n;
                         if (noiseType === 'simplex') n = noiseGen.simplex2d(sx, sy);
                         else if (noiseType === 'perlin') n = noiseGen.perlin(sx, sy);
@@ -1613,48 +1732,79 @@ self.onmessage = function(e) {
                         amplitude *= persistence; freq *= lacunarity;
                     }
                 }
-
-                if (maxValue > 0) {
-                    noiseValue = ridged ? (noiseValue / maxValue) : ((noiseValue / maxValue + 1) * 0.5);
-                } else {
-                    noiseValue = 0.5;
-                }
-
-                if (invert) noiseValue = 1.0 - noiseValue;
-                noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
-                noiseValue = Math.max(0, Math.min(1, noiseValue));
-                if (thresholdEnable) noiseValue = noiseValue >= threshold ? 1.0 : 0.0;
-
-                const pixelIdx = localY * width + x;
-                heightData[pixelIdx] = noiseValue;
-
-                const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.floor(noiseValue * (LUT_SIZE - 1))));
-                const colorOffset = lutIdx * 4;
-                const outOffset = pixelIdx * 4;
-
-                chunkData[outOffset]     = gradientLUT[colorOffset];
-                chunkData[outOffset + 1] = gradientLUT[colorOffset + 1];
-                chunkData[outOffset + 2] = gradientLUT[colorOffset + 2];
-                chunkData[outOffset + 3] = 255;
             }
-        }
 
-        self.postMessage({
-            type: 'CHUNK_COMPLETE',
-            data: chunkData,
-            heightData: heightData,
-            startY: startY,
-            endY: endY
-        }, [chunkData.buffer, heightData.buffer]);
+            if (maxValue > 0) {
+                noiseValue = ridged ? (noiseValue / maxValue) : ((noiseValue / maxValue + 1.0) * 0.5);
+            } else {
+                noiseValue = 0.5;
+            }
+
+            if (invert) noiseValue = 1.0 - noiseValue;
+            noiseValue = (noiseValue - 0.5) * contrast + 0.5 + brightness;
+            noiseValue = Math.max(0, Math.min(1, noiseValue));
+            if (thresholdEnable) noiseValue = noiseValue >= threshold ? 1.0 : 0.0;
+
+            const pixelIdx = localY * width + x;
+            heightData[pixelIdx] = noiseValue;
+
+            const lutIdx = Math.min(LUT_SIZE - 1, Math.max(0, Math.round(noiseValue * (LUT_SIZE - 1))));
+            const colorOffset = lutIdx * 4;
+            const outOffset = pixelIdx * 4;
+
+            chunkData[outOffset]     = gradientLUT[colorOffset];
+            chunkData[outOffset + 1] = gradientLUT[colorOffset + 1];
+            chunkData[outOffset + 2] = gradientLUT[colorOffset + 2];
+            chunkData[outOffset + 3] = 255;
+        }
+    }
+
+    return {
+        type: 'CHUNK_COMPLETE',
+        renderId: renderId,
+        data: chunkData,
+        heightData: heightData,
+        startY: startY,
+        endY: endY
+    };
+}
+
+self.onmessage = function(e) {
+    if (e.data && e.data.type === 'RENDER_CHUNK') {
+        const result = renderNoiseChunk(e.data);
+        self.postMessage(result, [result.data.buffer, result.heightData.buffer]);
     }
 };
 `;
 
-// --- 1. MULTI-TIER WORKER LOADER ---
+// Helper for safe numeric parsing without falsy-zero bugs
+function numOrDefault(val, fallback) {
+    const n = Number(val);
+    return (val !== undefined && val !== null && val !== '' && Number.isFinite(n)) ? n : fallback;
+}
+
+// Compile main-thread fallback synthesis function in case Web Workers are blocked by strict CSP
+let mainThreadRenderChunk = null;
+function getMainThreadRenderer() {
+    if (!mainThreadRenderChunk) {
+        try {
+            const factory = new Function(inlineWorkerSource + '\nreturn renderNoiseChunk;');
+            mainThreadRenderChunk = factory();
+        } catch (e) {
+            console.error('Main-thread renderer compilation failed:', e);
+        }
+    }
+    return mainThreadRenderChunk;
+}
+
+// --- 1. MULTI-TIER WORKER POOL & AUTOMATIC FALLBACK ---
 let workerBlobURL = null;
 let preferExternalWorker = (location.protocol === 'http:' || location.protocol === 'https:');
+let workersSupported = typeof Worker !== 'undefined';
+let workerPool = [];
 
-function createWorker() {
+function createSingleWorker() {
+    if (!workersSupported) return null;
     if (preferExternalWorker) {
         try {
             return new Worker('noiseWorker.js');
@@ -1662,11 +1812,36 @@ function createWorker() {
             preferExternalWorker = false;
         }
     }
-    if (!workerBlobURL) {
-        const blob = new Blob([inlineWorkerSource], { type: 'application/javascript' });
-        workerBlobURL = URL.createObjectURL(blob);
+    try {
+        if (!workerBlobURL) {
+            const blob = new Blob([inlineWorkerSource], { type: 'application/javascript' });
+            workerBlobURL = URL.createObjectURL(blob);
+        }
+        return new Worker(workerBlobURL);
+    } catch (e) {
+        workersSupported = false;
+        return null;
     }
-    return new Worker(workerBlobURL);
+}
+
+function acquireWorkers(count) {
+    if (!workersSupported) return null;
+    while (workerPool.length < count) {
+        const w = createSingleWorker();
+        if (!w) {
+            terminateAllPoolWorkers();
+            return null;
+        }
+        workerPool.push(w);
+    }
+    return workerPool.slice(0, count);
+}
+
+function terminateAllPoolWorkers() {
+    workerPool.forEach(w => {
+        try { w.terminate(); } catch (e) {}
+    });
+    workerPool = [];
 }
 
 // --- 2. HARDWARE PROBES & DEVICE CANVAS SAFETY ---
@@ -1700,30 +1875,31 @@ function detectHardwareCapabilities() {
 }
 
 function testCanvasAllocation(w, h) {
+    if (w < 16 || h < 16 || w > 16384 || h > 16384) return false;
     try {
         const c = document.createElement('canvas');
         c.width = w;
         c.height = h;
-        const ctx = c.getContext('2d');
-        if (!ctx) return false;
-        ctx.fillStyle = '#000';
-        ctx.fillRect(0, 0, 1, 1);
-        const probe = ctx.getImageData(0, 0, 1, 1);
-        return probe && probe.data.length === 4;
+        const testCtx = c.getContext('2d');
+        if (!testCtx) return false;
+        testCtx.fillStyle = '#000';
+        testCtx.fillRect(0, 0, 1, 1);
+        const probe = testCtx.getImageData(0, 0, 1, 1);
+        return Boolean(probe && probe.data.length === 4);
     } catch (e) {
         return false;
     }
 }
 
 function checkResolutionSupport() {
-    const w = parseInt(document.getElementById('texWidth').value) || 256;
-    const h = parseInt(document.getElementById('texHeight').value) || 256;
+    const w = Math.round(numOrDefault(document.getElementById('texWidth').value, 256));
+    const h = Math.round(numOrDefault(document.getElementById('texHeight').value, 256));
     const banner = document.getElementById('hwWarningBanner');
     const genBtn = document.getElementById('generateBtn');
 
     if (!testCanvasAllocation(w, h)) {
-        let suggested = detectedCanvasLimit >= 4096 ? "4096 × 4096" : "2048 × 2048";
-        banner.innerHTML = `Warning: Device canvas allocation boundary exceeded for [${w} × ${h}]. Maximum stable dimension is ~[${detectedCanvasLimit}px]. Recommended: ${suggested}.`;
+        const suggested = detectedCanvasLimit >= 4096 ? "4096 × 4096" : "2048 × 2048";
+        banner.innerHTML = `Warning: Device canvas allocation boundary exceeded for [${w} × ${h}]. Valid range is 16px to ~${detectedCanvasLimit}px. Recommended: ${suggested}.`;
         banner.style.display = 'block';
         genBtn.disabled = true;
         genBtn.innerText = 'Resolution Unsupported';
@@ -1744,7 +1920,7 @@ class ThreeController {
     constructor(containerId) {
         this.container = document.getElementById(containerId);
         this.isAvailable = typeof THREE !== 'undefined' && typeof THREE.OrbitControls !== 'undefined';
-        
+
         if (!this.isAvailable) {
             const offline = document.getElementById('threeOfflineNotice');
             if (offline) offline.style.display = 'block';
@@ -1755,6 +1931,7 @@ class ThreeController {
         this.autoRotate = true;
         this.rotateSpeed = 0.003;
         this.currentChannel = 'lit';
+        this.textures = {};
 
         this.scene = new THREE.Scene();
         this.scene.background = new THREE.Color(0x0a0c10);
@@ -1768,6 +1945,10 @@ class ThreeController {
         this.renderer.setSize(w, h);
         this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
         this.renderer.shadowMap.enabled = true;
+        if (THREE.ACESFilmicToneMapping !== undefined) {
+            this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+            this.renderer.toneMappingExposure = 1.05;
+        }
         this.container.appendChild(this.renderer.domElement);
 
         this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
@@ -1775,18 +1956,24 @@ class ThreeController {
         this.controls.dampingFactor = 0.05;
 
         // Lighting rig
-        const ambient = new THREE.AmbientLight(0xffffff, 0.45);
-        const keyLight = new THREE.DirectionalLight(0xffffff, 0.85);
-        keyLight.position.set(5, 10, 7);
-        const rimLight = new THREE.DirectionalLight(0x70a0ff, 0.4);
-        rimLight.position.set(-6, -8, -6);
-        const fillLight = new THREE.DirectionalLight(0xffeedd, 0.3);
-        fillLight.position.set(6, 0, -5);
-        this.scene.add(ambient, keyLight, rimLight, fillLight);
+        this.ambientLight = new THREE.AmbientLight(0xffffff, 0.55);
+        this.keyLight = new THREE.DirectionalLight(0xffffff, 0.95);
+        this.keyLight.position.set(5, 10, 7);
+        this.rimLight = new THREE.DirectionalLight(0x70a0ff, 0.45);
+        this.rimLight.position.set(-6, -8, -6);
+        this.fillLight = new THREE.DirectionalLight(0xffeedd, 0.35);
+        this.fillLight.position.set(6, 2, -5);
+        this.scene.add(this.ambientLight, this.keyLight, this.rimLight, this.fillLight);
 
         const gridHelper = new THREE.GridHelper(10, 10, 0x222631, 0x161922);
         gridHelper.position.y = -0.7;
         this.scene.add(gridHelper);
+
+        // Generate procedural studio environment map so metallic materials reflect realistically
+        this.envMap = this.createProceduralEnvironmentMap();
+        if (this.envMap) {
+            this.scene.environment = this.envMap;
+        }
 
         this.mesh = null;
         this.currentMeshType = 'sphere';
@@ -1795,6 +1982,8 @@ class ThreeController {
             color: 0xffffff,
             roughness: 0.6,
             metalness: 0.1,
+            envMap: this.envMap || null,
+            envMapIntensity: 1.0,
             side: THREE.DoubleSide
         });
 
@@ -1812,6 +2001,126 @@ class ThreeController {
         });
     }
 
+    createProceduralEnvironmentMap() {
+        try {
+            if (typeof THREE.PMREMGenerator === 'undefined') return null;
+            const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+            pmremGenerator.compileEquirectangularShader();
+
+            const envScene = new THREE.Scene();
+            envScene.background = new THREE.Color(0x181c24);
+
+            const domeGeo = new THREE.SphereGeometry(20, 32, 16);
+            const domeMat = new THREE.MeshBasicMaterial({ color: 0x1c2230, side: THREE.BackSide });
+            envScene.add(new THREE.Mesh(domeGeo, domeMat));
+
+            // Studio softboxes for realistic specular/metallic reflections
+            const panelGeo = new THREE.PlaneGeometry(10, 10);
+            const topLight = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide }));
+            topLight.position.set(0, 12, 0);
+            topLight.rotation.x = Math.PI / 2;
+            envScene.add(topLight);
+
+            const warmLight = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ color: 0xffe4b5, side: THREE.DoubleSide }));
+            warmLight.position.set(12, 4, 10);
+            warmLight.lookAt(0, 0, 0);
+            envScene.add(warmLight);
+
+            const coolLight = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ color: 0x8ab4f8, side: THREE.DoubleSide }));
+            coolLight.position.set(-12, 3, -10);
+            coolLight.lookAt(0, 0, 0);
+            envScene.add(coolLight);
+
+            const floorLight = new THREE.Mesh(panelGeo, new THREE.MeshBasicMaterial({ color: 0x2a303c, side: THREE.DoubleSide }));
+            floorLight.position.set(0, -12, 0);
+            floorLight.rotation.x = -Math.PI / 2;
+            envScene.add(floorLight);
+
+            const renderTarget = pmremGenerator.fromScene(envScene, 0.04);
+            pmremGenerator.dispose();
+            return renderTarget.texture;
+        } catch (e) {
+            return null;
+        }
+    }
+
+    // Helper to build subdivided, properly wound (CCW outward) triangles & quads
+    buildSubdividedMesh(faces, subdivisions = 24) {
+        const positions = [];
+        const uvs = [];
+        const pushTri = (p0, p1, p2, uv0, uv1, uv2) => {
+            positions.push(p0[0], p0[1], p0[2], p1[0], p1[1], p1[2], p2[0], p2[1], p2[2]);
+            uvs.push(uv0[0], uv0[1], uv1[0], uv1[1], uv2[0], uv2[1]);
+        };
+        const lerp3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+        const lerp2 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+
+        faces.forEach(face => {
+            const n = subdivisions;
+            if (face.type === 'quad') {
+                // CCW quad: v00 (bottom-left), v10 (bottom-right), v11 (top-right), v01 (top-left)
+                const { v00, v10, v11, v01, uv00, uv10, uv11, uv01 } = face;
+                for (let j = 0; j < n; j++) {
+                    const ty0 = j / n, ty1 = (j + 1) / n;
+                    const left0 = lerp3(v00, v01, ty0), right0 = lerp3(v10, v11, ty0);
+                    const left1 = lerp3(v00, v01, ty1), right1 = lerp3(v10, v11, ty1);
+                    const uvl0 = lerp2(uv00, uv01, ty0), uvr0 = lerp2(uv10, uv11, ty0);
+                    const uvl1 = lerp2(uv00, uv01, ty1), uvr1 = lerp2(uv10, uv11, ty1);
+                    for (let i = 0; i < n; i++) {
+                        const tx0 = i / n, tx1 = (i + 1) / n;
+                        const p00 = lerp3(left0, right0, tx0), p10 = lerp3(left0, right0, tx1);
+                        const p01 = lerp3(left1, right1, tx0), p11 = lerp3(left1, right1, tx1);
+                        const t00 = lerp2(uvl0, uvr0, tx0), t10 = lerp2(uvl0, uvr0, tx1);
+                        const t01 = lerp2(uvl1, uvr1, tx0), t11 = lerp2(uvl1, uvr1, tx1);
+                        pushTri(p00, p10, p11, t00, t10, t11);
+                        pushTri(p00, p11, p01, t00, t11, t01);
+                    }
+                }
+            } else if (face.type === 'tri') {
+                // CCW triangle: v0, v1, v2
+                const { v0, v1, v2, uv0, uv1, uv2 } = face;
+                const gridP = [];
+                const gridUV = [];
+                for (let j = 0; j <= n; j++) {
+                    const rowP = [];
+                    const rowUV = [];
+                    const count = n - j;
+                    for (let i = 0; i <= count; i++) {
+                        const u = i / n;
+                        const v = j / n;
+                        const w = 1.0 - u - v;
+                        rowP.push([
+                            w * v0[0] + u * v1[0] + v * v2[0],
+                            w * v0[1] + u * v1[1] + v * v2[1],
+                            w * v0[2] + u * v1[2] + v * v2[2]
+                        ]);
+                        rowUV.push([
+                            w * uv0[0] + u * uv1[0] + v * uv2[0],
+                            w * uv0[1] + u * uv1[1] + v * uv2[1]
+                        ]);
+                    }
+                    gridP.push(rowP);
+                    gridUV.push(rowUV);
+                }
+                for (let j = 0; j < n; j++) {
+                    const count = n - j;
+                    for (let i = 0; i < count; i++) {
+                        pushTri(gridP[j][i], gridP[j][i + 1], gridP[j + 1][i], gridUV[j][i], gridUV[j][i + 1], gridUV[j + 1][i]);
+                        if (i + 1 < count) {
+                            pushTri(gridP[j][i + 1], gridP[j + 1][i + 1], gridP[j + 1][i], gridUV[j][i + 1], gridUV[j + 1][i + 1], gridUV[j + 1][i]);
+                        }
+                    }
+                }
+            }
+        });
+
+        const geo = new THREE.BufferGeometry();
+        geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3));
+        geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2));
+        geo.computeVertexNormals();
+        return geo;
+    }
+
     initGeometries() {
         this.geometries = {};
         this.geometries.block = new THREE.BoxGeometry(1, 1, 1, 32, 32, 32);
@@ -1823,47 +2132,40 @@ class ThreeController {
         this.geometries.icosahedron = new THREE.IcosahedronGeometry(0.65, 16);
         this.geometries.torusKnot = new THREE.TorusKnotGeometry(0.38, 0.13, 120, 20);
 
-        // Buffer geometry for wedge
-        const wedgeGeo = new THREE.BufferGeometry();
-        const wedgeVerts = new Float32Array([
-            -0.5, -0.5, 0.5,   0.5, -0.5, 0.5,  -0.5, -0.5, -0.5,
-             0.5, -0.5, 0.5,   0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
-            -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
-             0.5, -0.5, -0.5,   0.5, 0.5, -0.5,   -0.5, 0.5, -0.5,
-            -0.5, -0.5, 0.5,   -0.5, 0.5, -0.5,   0.5, -0.5, 0.5,
-             0.5, -0.5, 0.5,    -0.5, 0.5, -0.5,   0.5, 0.5, -0.5,
-            -0.5, -0.5, 0.5,   -0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
-             0.5, -0.5, 0.5,    0.5, 0.5, -0.5,    0.5, -0.5, -0.5
-        ]);
-        const wedgeUVs = new Float32Array([
-            0,1, 1,1, 0,0,  1,1, 1,0, 0,0,
-            0,0, 1,0, 0,1,  1,0, 1,1, 0,1,
-            0,0, 0,1, 1,0,  1,0, 0,1, 1,1,
-            0,0, 1,0, 1,1,  0,0, 1,1, 0,1
-        ]);
-        wedgeGeo.setAttribute('position', new THREE.BufferAttribute(wedgeVerts, 3));
-        wedgeGeo.setAttribute('uv', new THREE.BufferAttribute(wedgeUVs, 2));
-        wedgeGeo.computeVertexNormals();
-        this.geometries.wedge = wedgeGeo;
+        // Properly wound (CCW outward) & subdivided Wedge geometry
+        this.geometries.wedge = this.buildSubdividedMesh([
+            // Slope face (+Y/+Z normal)
+            { type: 'quad', v00: [-0.5, -0.5, 0.5], v10: [0.5, -0.5, 0.5], v11: [0.5, 0.5, -0.5], v01: [-0.5, 0.5, -0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            // Back face (-Z normal)
+            { type: 'quad', v00: [0.5, -0.5, -0.5], v10: [-0.5, -0.5, -0.5], v11: [-0.5, 0.5, -0.5], v01: [0.5, 0.5, -0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            // Bottom face (-Y normal)
+            { type: 'quad', v00: [-0.5, -0.5, -0.5], v10: [0.5, -0.5, -0.5], v11: [0.5, -0.5, 0.5], v01: [-0.5, -0.5, 0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            // Left face (-X normal)
+            { type: 'tri', v0: [-0.5, -0.5, -0.5], v1: [-0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
+            // Right face (+X normal)
+            { type: 'tri', v0: [0.5, -0.5, 0.5], v1: [0.5, -0.5, -0.5], v2: [0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [1, 1] }
+        ], 20);
 
-        // Buffer geometry for corner wedge
-        const cornerGeo = new THREE.BufferGeometry();
-        const cornerVerts = new Float32Array([
-            -0.5, -0.5, 0.5,  0.5, -0.5, -0.5,  -0.5, -0.5, -0.5,
-            -0.5, -0.5, -0.5,  0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
-             -0.5, -0.5, 0.5, -0.5, -0.5, -0.5,  -0.5, 0.5, -0.5,
-             -0.5, -0.5, 0.5,  -0.5, 0.5, -0.5,  0.5, -0.5, -0.5
-        ]);
-        const cornerUVs = new Float32Array([
-             0,1, 1,0, 0,0,
-             0,0, 1,0, 0,1,
-             0,1, 0,0, 1,0,
-             0,0, 0,1, 1,0
-        ]);
-        cornerGeo.setAttribute('position', new THREE.BufferAttribute(cornerVerts, 3));
-        cornerGeo.setAttribute('uv', new THREE.BufferAttribute(cornerUVs, 2));
-        cornerGeo.computeVertexNormals();
-        this.geometries.cornerWedge = cornerGeo;
+        // Properly wound (CCW outward) & subdivided Corner Wedge geometry (square base + apex at [-0.5, 0.5, -0.5])
+        this.geometries.cornerWedge = this.buildSubdividedMesh([
+            // Bottom face (-Y normal)
+            { type: 'quad', v00: [-0.5, -0.5, -0.5], v10: [0.5, -0.5, -0.5], v11: [0.5, -0.5, 0.5], v01: [-0.5, -0.5, 0.5], uv00: [0, 0], uv10: [1, 0], uv11: [1, 1], uv01: [0, 1] },
+            // Back vertical triangle (-Z normal)
+            { type: 'tri', v0: [0.5, -0.5, -0.5], v1: [-0.5, -0.5, -0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [1, 1] },
+            // Left vertical triangle (-X normal)
+            { type: 'tri', v0: [-0.5, -0.5, -0.5], v1: [-0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
+            // Front sloped triangle (+Z/+Y normal)
+            { type: 'tri', v0: [-0.5, -0.5, 0.5], v1: [0.5, -0.5, 0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] },
+            // Right sloped triangle (+X/+Y normal)
+            { type: 'tri', v0: [0.5, -0.5, 0.5], v1: [0.5, -0.5, -0.5], v2: [-0.5, 0.5, -0.5], uv0: [0, 0], uv1: [1, 0], uv2: [0, 1] }
+        ], 20);
+
+        // Populate uv2 on all geometries so Three.js aoMap and aoMapIntensity work natively
+        Object.values(this.geometries).forEach(geo => {
+            if (geo.attributes.uv && !geo.attributes.uv2) {
+                geo.setAttribute('uv2', new THREE.BufferAttribute(geo.attributes.uv.array, 2));
+            }
+        });
     }
 
     setMesh(type) {
@@ -1875,37 +2177,88 @@ class ThreeController {
         this.mesh.position.y = 0;
         this.scene.add(this.mesh);
 
+        const labels = {
+            block: 'Cube', sphere: 'Sphere', torusKnot: 'Torus Knot',
+            cylinder: 'Cylinder', wedge: 'Wedge', cornerWedge: 'Corner Wedge',
+            torus: 'Torus', plane: 'Plane', cone: 'Cone', icosahedron: 'Icosahedron'
+        };
         const badge = document.getElementById('vMeshBadge');
-        if (badge) badge.innerText = type.charAt(0).toUpperCase() + type.slice(1);
+        if (badge) badge.innerText = labels[type] || (type.charAt(0).toUpperCase() + type.slice(1));
     }
 
     setTilingRepeat(repeat) {
         this.uvRepeat = repeat;
+        if (!this.isAvailable) return;
         const rep = new THREE.Vector2(repeat, repeat);
-        ['map', 'normalMap', 'roughnessMap', 'aoMap', 'displacementMap'].forEach(texKey => {
-            if (this.material && this.material[texKey]) {
-                this.material[texKey].repeat.copy(rep);
-                this.material[texKey].needsUpdate = true;
+        Object.values(this.textures).forEach(tex => {
+            if (tex) {
+                tex.repeat.copy(rep);
+                tex.needsUpdate = true;
             }
         });
         const badge = document.getElementById('vTilingBadge');
         if (badge) badge.innerText = `${repeat}×${repeat} Repeat`;
     }
 
+    getOrUpdateTexture(key, canvasSource) {
+        if (!this.isAvailable || !canvasSource) return null;
+        let tex = this.textures[key];
+        if (!tex) {
+            tex = new THREE.CanvasTexture(canvasSource);
+            tex.wrapS = THREE.RepeatWrapping;
+            tex.wrapT = THREE.RepeatWrapping;
+            this.textures[key] = tex;
+        } else {
+            tex.image = canvasSource;
+        }
+        tex.repeat.set(this.uvRepeat, this.uvRepeat);
+        tex.needsUpdate = true;
+        return tex;
+    }
+
     updateMaterialParams() {
         if (!this.isAvailable || !this.material) return;
-        this.material.roughness = parseFloat(document.getElementById('matRoughness').value);
-        this.material.metalness = parseFloat(document.getElementById('matMetalness').value);
 
-        const bumpDepth = parseFloat(document.getElementById('bumpScale').value);
+        const isLit = this.currentChannel === 'lit';
+        if (!isLit) {
+            // Flat / unlit inspection mode so individual PBR channels aren't darkened by metalness or colored lights
+            this.material.roughness = 1.0;
+            this.material.metalness = 0.0;
+            this.material.envMapIntensity = 0.0;
+            this.material.displacementScale = 0.0;
+            this.material.displacementBias = 0.0;
+            this.material.aoMapIntensity = 0.0;
+            this.ambientLight.intensity = 1.0;
+            this.keyLight.intensity = 0.15;
+            this.rimLight.intensity = 0.0;
+            this.fillLight.intensity = 0.0;
+            this.material.needsUpdate = true;
+            return;
+        }
+
+        this.ambientLight.intensity = 0.55;
+        this.keyLight.intensity = 0.95;
+        this.rimLight.intensity = 0.45;
+        this.fillLight.intensity = 0.35;
+        this.material.envMapIntensity = 1.0;
+
+        const baseRough = numOrDefault(document.getElementById('matRoughness').value, 0.6);
+        const baseMetal = numOrDefault(document.getElementById('matMetalness').value, 0.1);
+
+        // Roughness & Metallic maps already encode baseRough & baseMetal; set scalar multiplier to 1.0 when map is active
+        this.material.roughness = this.material.roughnessMap ? 1.0 : baseRough;
+        this.material.metalness = this.material.metalnessMap ? 1.0 : baseMetal;
+
+        const bumpDepth = numOrDefault(document.getElementById('bumpScale').value, 0.3);
         if (this.material.normalScale) {
             this.material.normalScale.set(bumpDepth, bumpDepth);
         }
-        
-        const dispScale = parseFloat(document.getElementById('displacementScale').value);
-        this.material.displacementScale = dispScale;
 
-        const aoInt = parseFloat(document.getElementById('aoIntensity').value);
+        const dispScale = numOrDefault(document.getElementById('displacementScale').value, 0.05);
+        this.material.displacementScale = dispScale;
+        this.material.displacementBias = -dispScale * 0.5;
+
+        const aoInt = numOrDefault(document.getElementById('aoIntensity').value, 1.0);
         this.material.aoMapIntensity = aoInt;
 
         this.material.needsUpdate = true;
@@ -1913,26 +2266,19 @@ class ThreeController {
 
     applyTexture(canvasSource, mapType = 'diffuse') {
         if (!this.isAvailable || !canvasSource) return;
-
-        const tex = new THREE.CanvasTexture(canvasSource);
-        tex.wrapS = THREE.RepeatWrapping;
-        tex.wrapT = THREE.RepeatWrapping;
-        tex.repeat.set(this.uvRepeat, this.uvRepeat);
+        const tex = this.getOrUpdateTexture(mapType, canvasSource);
 
         if (mapType === 'diffuse') {
-            if (this.material.map) this.material.map.dispose();
             this.material.map = tex;
         } else if (mapType === 'normal') {
-            if (this.material.normalMap) this.material.normalMap.dispose();
             this.material.normalMap = tex;
         } else if (mapType === 'roughness') {
-            if (this.material.roughnessMap) this.material.roughnessMap.dispose();
             this.material.roughnessMap = tex;
+        } else if (mapType === 'metallic') {
+            this.material.metalnessMap = tex;
         } else if (mapType === 'height') {
-            if (this.material.displacementMap) this.material.displacementMap.dispose();
             this.material.displacementMap = tex;
         } else if (mapType === 'ao') {
-            if (this.material.aoMap) this.material.aoMap.dispose();
             this.material.aoMap = tex;
         }
         this.material.needsUpdate = true;
@@ -1942,46 +2288,44 @@ class ThreeController {
         if (!this.isAvailable || !this.material) return;
         this.currentChannel = channel;
 
+        const channelLabels = {
+            lit: 'Lit PBR',
+            diffuse: 'Diffuse',
+            normal: 'Normal Map',
+            height: 'Height Map',
+            roughness: 'Roughness Map',
+            metallic: 'Metallic Map',
+            ao: 'AO Map'
+        };
         const badge = document.getElementById('vChannelBadge');
-        if (badge) badge.innerText = channel.toUpperCase();
+        if (badge) badge.innerText = channelLabels[channel] || channel.toUpperCase();
+
+        const diffuseSource = state.diffuseCanvas || state.canvas;
 
         if (channel === 'lit') {
             this.material.color.setHex(0xffffff);
-            this.applyTexture(state.canvas, 'diffuse');
+            this.applyTexture(diffuseSource, 'diffuse');
             this.applyTexture(state.normalCanvas, 'normal');
             this.applyTexture(state.roughnessCanvas, 'roughness');
+            this.applyTexture(state.metallicCanvas, 'metallic');
             this.applyTexture(state.aoCanvas, 'ao');
             this.applyTexture(state.heightCanvas, 'height');
-        } else if (channel === 'diffuse') {
+        } else {
             this.material.normalMap = null;
             this.material.roughnessMap = null;
+            this.material.metalnessMap = null;
             this.material.aoMap = null;
             this.material.displacementMap = null;
-            this.applyTexture(state.canvas, 'diffuse');
-        } else if (channel === 'normal') {
-            this.material.normalMap = null;
-            this.material.roughnessMap = null;
-            this.material.aoMap = null;
-            this.material.displacementMap = null;
-            this.applyTexture(state.normalCanvas || state.canvas, 'diffuse');
-        } else if (channel === 'height') {
-            this.material.normalMap = null;
-            this.material.roughnessMap = null;
-            this.material.aoMap = null;
-            this.material.displacementMap = null;
-            this.applyTexture(state.heightCanvas || state.canvas, 'diffuse');
-        } else if (channel === 'roughness') {
-            this.material.normalMap = null;
-            this.material.roughnessMap = null;
-            this.material.aoMap = null;
-            this.material.displacementMap = null;
-            this.applyTexture(state.roughnessCanvas || state.canvas, 'diffuse');
-        } else if (channel === 'ao') {
-            this.material.normalMap = null;
-            this.material.roughnessMap = null;
-            this.material.aoMap = null;
-            this.material.displacementMap = null;
-            this.applyTexture(state.aoCanvas || state.canvas, 'diffuse');
+
+            let inspectCanvas = diffuseSource;
+            if (channel === 'normal' && state.normalCanvas) inspectCanvas = state.normalCanvas;
+            else if (channel === 'height' && state.heightCanvas) inspectCanvas = state.heightCanvas;
+            else if (channel === 'roughness' && state.roughnessCanvas) inspectCanvas = state.roughnessCanvas;
+            else if (channel === 'metallic' && state.metallicCanvas) inspectCanvas = state.metallicCanvas;
+            else if (channel === 'ao' && state.aoCanvas) inspectCanvas = state.aoCanvas;
+
+            this.applyTexture(inspectCanvas, 'inspect');
+            this.material.map = this.textures['inspect'];
         }
         this.updateMaterialParams();
     }
@@ -2007,9 +2351,11 @@ class ThreeController {
 // --- 4. APP STATE & INITIALIZATION ---
 const state = {
     canvas: null,
+    diffuseCanvas: null,
     normalCanvas: null,
     heightCanvas: null,
     roughnessCanvas: null,
+    metallicCanvas: null,
     aoCanvas: null,
     inputs: {},
     uploadedImage: null,
@@ -2025,9 +2371,9 @@ const state = {
 };
 
 let ctx = null;
+let diffuseCtx = null;
 let threeView = null;
 let isRendering = false;
-let activeWorkers = [];
 let currentRenderId = 0;
 let proxyCanvas = null;
 let proxyCtx = null;
@@ -2035,6 +2381,11 @@ let proxyCtx = null;
 function init() {
     state.canvas = document.getElementById('textureCanvas');
     ctx = state.canvas.getContext('2d', { willReadFrequently: true });
+
+    state.diffuseCanvas = document.createElement('canvas');
+    state.diffuseCanvas.width = 256;
+    state.diffuseCanvas.height = 256;
+    diffuseCtx = state.diffuseCanvas.getContext('2d', { willReadFrequently: true });
 
     proxyCanvas = document.createElement('canvas');
     proxyCanvas.width = 512;
@@ -2051,7 +2402,7 @@ function init() {
         'contrast', 'brightness', 'invert', 'thresholdEnable', 'threshold',
         'bumpScale', 'displacementScale', 'matRoughness', 'matMetalness', 'aoIntensity',
         'normalStrength', 'directXNormalCheckbox', 'seamlessTilingCheckbox',
-        'seamlessBlendUpload'
+        'seamlessBlendUpload', 'remapUploadGradient'
     ];
 
     inputIds.forEach(id => {
@@ -2067,11 +2418,29 @@ function init() {
             if (el.type === 'range') updateValueLabel(id, e.target.value);
             document.getElementById('presetSelect').value = 'custom';
 
-            if (['matRoughness', 'matMetalness', 'bumpScale', 'displacementScale', 'aoIntensity'].includes(id)) {
+            if (id === 'bumpScale' || id === 'displacementScale') {
                 if (threeView) threeView.updateMaterialParams();
+            } else if (id === 'matRoughness') {
+                if (!isRendering) {
+                    generateRoughnessMap();
+                    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+                    render2DCanvasView();
+                }
+            } else if (id === 'matMetalness') {
+                if (!isRendering) {
+                    generateMetallicMap();
+                    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+                    render2DCanvasView();
+                }
+            } else if (id === 'aoIntensity') {
+                if (!isRendering) {
+                    generateAoMap();
+                    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+                    render2DCanvasView();
+                }
             } else if (id === 'normalStrength' || id === 'directXNormalCheckbox') {
                 if (!isRendering) {
-                    generateAllPbrMaps();
+                    generateNormalMap();
                     if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
                     render2DCanvasView();
                 }
@@ -2098,6 +2467,7 @@ function init() {
     document.getElementById('randomBtn').addEventListener('click', randomizeAll);
     document.getElementById('newSeedBtn').addEventListener('click', () => {
         state.inputs.seed.value = Math.floor(Math.random() * 99999);
+        document.getElementById('presetSelect').value = 'custom';
         generateTexture();
     });
 
@@ -2116,23 +2486,45 @@ function init() {
     document.getElementById('presetSelect').addEventListener('change', (e) => loadPreset(e.target.value));
 
     // Gradient management
-    document.getElementById('addStopBtn').addEventListener('click', () => addGradientStop(0.5, "#3498db"));
-    document.getElementById('distributeStopsBtn').addEventListener('click', distributeStopsEvenly);
-    document.getElementById('reverseGradientBtn').addEventListener('click', reverseGradient);
-    document.getElementById('randomGradientBtn').addEventListener('click', randomizeGradientOnly);
+    document.getElementById('addStopBtn').addEventListener('click', () => {
+        document.getElementById('presetSelect').value = 'custom';
+        addGradientStop(0.5, sampleColorAtPos(0.5));
+    });
+    document.getElementById('distributeStopsBtn').addEventListener('click', () => {
+        document.getElementById('presetSelect').value = 'custom';
+        distributeStopsEvenly();
+    });
+    document.getElementById('reverseGradientBtn').addEventListener('click', () => {
+        document.getElementById('presetSelect').value = 'custom';
+        reverseGradient();
+    });
+    document.getElementById('randomGradientBtn').addEventListener('click', () => {
+        document.getElementById('presetSelect').value = 'custom';
+        randomizeGradientOnly();
+    });
     document.getElementById('quickPaletteSelect').addEventListener('change', (e) => {
         if (e.target.value) {
+            document.getElementById('presetSelect').value = 'custom';
             loadQuickPalette(e.target.value);
             e.target.value = "";
         }
     });
 
-    // Direct ramp sampling
-    document.getElementById('gradient-preview').addEventListener('click', (e) => {
+    // Direct ramp sampling (Mouse + Keyboard)
+    const gradPreviewEl = document.getElementById('gradient-preview');
+    gradPreviewEl.addEventListener('click', (e) => {
         const rect = e.currentTarget.getBoundingClientRect();
-        const clickPos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const clickPos = Math.max(0, Math.min(1, (e.clientX - rect.left) / Math.max(1, rect.width)));
         const sampledColor = sampleColorAtPos(clickPos);
+        document.getElementById('presetSelect').value = 'custom';
         addGradientStop(parseFloat(clickPos.toFixed(3)), sampledColor);
+    });
+    gradPreviewEl.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            document.getElementById('presetSelect').value = 'custom';
+            addGradientStop(0.5, sampleColorAtPos(0.5));
+        }
     });
 
     // Viewport control bindings
@@ -2143,7 +2535,7 @@ function init() {
         if (threeView) threeView.setMesh(e.target.value);
     });
     document.getElementById('tilingRepeatSelect').addEventListener('change', (e) => {
-        if (threeView) threeView.setTilingRepeat(parseInt(e.target.value));
+        if (threeView) threeView.setTilingRepeat(parseInt(e.target.value, 10) || 2);
     });
 
     document.getElementById('toggleRotateBtn').addEventListener('click', () => {
@@ -2182,7 +2574,7 @@ function init() {
 
     // Keyboard shortcuts
     window.addEventListener('keydown', (e) => {
-        if (['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement.tagName)) return;
+        if (['INPUT', 'SELECT', 'TEXTAREA', 'BUTTON'].includes(document.activeElement.tagName)) return;
         if (e.code === 'KeyR') {
             randomizeAll();
         } else if (e.code === 'Space') {
@@ -2204,10 +2596,10 @@ function updateValueLabel(id, val) {
 let debounceTimer = null;
 function debouncedGenerate() {
     clearTimeout(debounceTimer);
-    debounceTimer = setTimeout(generateTexture, 130);
+    debounceTimer = setTimeout(generateTexture, 90);
 }
 
-// --- 5. IMAGE UPLOAD & SEAMLESS EDGE BLENDING ---
+// --- 5. IMAGE UPLOAD & SYMMETRIC SEAMLESS EDGE BLENDING ---
 function handleImageUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -2238,32 +2630,44 @@ function applySeamlessEdgeBlend(sourceCanvas) {
     const sCtx = sourceCanvas.getContext('2d');
     const imgData = sCtx.getImageData(0, 0, w, h);
     const src = imgData.data;
+    const copy = new Uint8ClampedArray(src);
 
-    const blendW = Math.floor(w * 0.15);
-    const blendH = Math.floor(h * 0.15);
+    const blendW = Math.max(2, Math.floor(w * 0.18));
+    const blendH = Math.max(2, Math.floor(h * 0.18));
 
+    // Symmetric horizontal opposite-edge blend: both edges meet at 0.5*(L+R) at the seam with C1 continuity
     for (let y = 0; y < h; y++) {
         for (let x = 0; x < blendW; x++) {
-            const factor = 0.5 * (1.0 - Math.cos((x / blendW) * Math.PI));
+            const t = (x + 0.5) / blendW;
+            const smooth = t * t * (3.0 - 2.0 * t);
+            const weight = 0.5 + 0.5 * smooth;
             const leftIdx = (y * w + x) * 4;
             const rightIdx = (y * w + (w - 1 - x)) * 4;
 
             for (let c = 0; c < 3; c++) {
-                const blended = src[leftIdx + c] * factor + src[rightIdx + c] * (1.0 - factor);
-                src[leftIdx + c] = Math.round(blended);
+                const lVal = copy[leftIdx + c];
+                const rVal = copy[rightIdx + c];
+                src[leftIdx + c] = Math.round(lVal * weight + rVal * (1.0 - weight));
+                src[rightIdx + c] = Math.round(rVal * weight + lVal * (1.0 - weight));
             }
         }
     }
 
+    const hPassCopy = new Uint8ClampedArray(src);
+    // Symmetric vertical opposite-edge blend
     for (let x = 0; x < w; x++) {
         for (let y = 0; y < blendH; y++) {
-            const factor = 0.5 * (1.0 - Math.cos((y / blendH) * Math.PI));
+            const t = (y + 0.5) / blendH;
+            const smooth = t * t * (3.0 - 2.0 * t);
+            const weight = 0.5 + 0.5 * smooth;
             const topIdx = (y * w + x) * 4;
             const botIdx = ((h - 1 - y) * w + x) * 4;
 
             for (let c = 0; c < 3; c++) {
-                const blended = src[topIdx + c] * factor + src[botIdx + c] * (1.0 - factor);
-                src[topIdx + c] = Math.round(blended);
+                const tVal = hPassCopy[topIdx + c];
+                const bVal = hPassCopy[botIdx + c];
+                src[topIdx + c] = Math.round(tVal * weight + bVal * (1.0 - weight));
+                src[botIdx + c] = Math.round(bVal * weight + tVal * (1.0 - weight));
             }
         }
     }
@@ -2335,6 +2739,7 @@ function removeGradientStopByRef(stopRef) {
     const idx = state.gradientStops.indexOf(stopRef);
     if (idx !== -1) {
         state.gradientStops.splice(idx, 1);
+        document.getElementById('presetSelect').value = 'custom';
         renderGradientUI();
         debouncedGenerate();
     }
@@ -2466,6 +2871,7 @@ function renderGradientUI() {
 
         colInput.addEventListener('input', (e) => {
             stop.color = e.target.value;
+            document.getElementById('presetSelect').value = 'custom';
             updateGradientPreview();
             debouncedGenerate();
         });
@@ -2474,8 +2880,13 @@ function renderGradientUI() {
             const val = parseFloat(e.target.value);
             stop.pos = val;
             numInput.value = val;
+            document.getElementById('presetSelect').value = 'custom';
             updateGradientPreview();
             debouncedGenerate();
+        });
+
+        sliderInput.addEventListener('change', () => {
+            renderGradientUI();
         });
 
         numInput.addEventListener('change', (e) => {
@@ -2485,6 +2896,7 @@ function renderGradientUI() {
             stop.pos = val;
             sliderInput.value = val;
             numInput.value = val;
+            document.getElementById('presetSelect').value = 'custom';
             renderGradientUI();
             debouncedGenerate();
         });
@@ -2510,23 +2922,30 @@ function updateGradientPreview() {
     document.getElementById('gradient-preview').style.background = `linear-gradient(to right, ${css})`;
 }
 
-// --- 7. PBR MAP FILTERS ---
-function generateAllPbrMaps() {
-    const w = state.canvas.width;
-    const h = state.canvas.height;
-    if (w * h === 0) return;
+// --- 7. MODULAR 6-CHANNEL PBR MAP FILTERS ---
+function ensureHeightArray() {
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
+    if (w * h === 0) return null;
 
-    // 1. Height Map
     let heightArr = state.rawHeights;
     if (!heightArr || heightArr.length !== w * h) {
         heightArr = new Float32Array(w * h);
-        const img = ctx.getImageData(0, 0, w, h).data;
+        const img = diffuseCtx.getImageData(0, 0, w, h).data;
         for (let i = 0; i < w * h; i++) {
             const idx = i * 4;
             heightArr[i] = (0.299 * img[idx] + 0.587 * img[idx + 1] + 0.114 * img[idx + 2]) / 255.0;
         }
         state.rawHeights = heightArr;
     }
+    return heightArr;
+}
+
+function generateHeightMap() {
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
+    const heightArr = ensureHeightArray();
+    if (!heightArr) return;
 
     const heightCanvas = state.heightCanvas || document.createElement('canvas');
     heightCanvas.width = w;
@@ -2536,7 +2955,7 @@ function generateAllPbrMaps() {
     const hDst = hImgData.data;
 
     for (let i = 0; i < w * h; i++) {
-        const val = Math.floor(heightArr[i] * 255);
+        const val = Math.max(0, Math.min(255, Math.round(heightArr[i] * 255)));
         const idx = i * 4;
         hDst[idx] = val;
         hDst[idx + 1] = val;
@@ -2545,8 +2964,14 @@ function generateAllPbrMaps() {
     }
     hCtx.putImageData(hImgData, 0, 0);
     state.heightCanvas = heightCanvas;
+}
 
-    // 2. Sobel Normal Map Filter
+function generateNormalMap() {
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
+    const heightArr = ensureHeightArray();
+    if (!heightArr) return;
+
     const normalCanvas = state.normalCanvas || document.createElement('canvas');
     normalCanvas.width = w;
     normalCanvas.height = h;
@@ -2554,7 +2979,7 @@ function generateAllPbrMaps() {
     const nImgData = nCtx.createImageData(w, h);
     const nDst = nImgData.data;
 
-    const strength = parseFloat(document.getElementById('normalStrength').value || 3.0);
+    const strength = numOrDefault(document.getElementById('normalStrength').value, 3.0);
     const directX = document.getElementById('directXNormalCheckbox').checked;
     const seamless = document.getElementById('seamlessTilingCheckbox').checked;
 
@@ -2575,40 +3000,45 @@ function generateAllPbrMaps() {
             const l12 = heightArr[yp1 * w + x];
             const l22 = heightArr[yp1 * w + xp1];
 
-            const dX = ((l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02));
-            const dY = ((l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20));
+            const dX = (l20 + 2.0 * l21 + l22) - (l00 + 2.0 * l01 + l02);
+            const dY = (l02 + 2.0 * l12 + l22) - (l00 + 2.0 * l10 + l20);
 
-            let nx = -dX * strength;
-            let ny = directX ? (dY * strength) : (-dY * strength);
-            let nz = 1.0;
+            const nx = -dX * strength;
+            const ny = directX ? (dY * strength) : (-dY * strength);
+            const nz = 1.0;
 
-            const len = Math.sqrt(nx * nx + ny * ny + nz * nz);
-            const normX = nx / len;
-            const normY = ny / len;
-            const normZ = nz / len;
-
+            const invLen = 1.0 / Math.sqrt(nx * nx + ny * ny + nz * nz);
             const idx = (y * w + x) * 4;
-            nDst[idx]     = Math.floor((normX + 1.0) * 127.5);
-            nDst[idx + 1] = Math.floor((normY + 1.0) * 127.5);
-            nDst[idx + 2] = Math.floor((normZ + 1.0) * 127.5);
+            nDst[idx]     = Math.round((nx * invLen + 1.0) * 127.5);
+            nDst[idx + 1] = Math.round((ny * invLen + 1.0) * 127.5);
+            nDst[idx + 2] = Math.round((nz * invLen + 1.0) * 127.5);
             nDst[idx + 3] = 255;
         }
     }
     nCtx.putImageData(nImgData, 0, 0);
     state.normalCanvas = normalCanvas;
+}
 
-    // 3. Roughness Map Filter
+function generateRoughnessMap() {
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
+    const heightArr = ensureHeightArray();
+    if (!heightArr) return;
+
     const roughnessCanvas = state.roughnessCanvas || document.createElement('canvas');
     roughnessCanvas.width = w;
     roughnessCanvas.height = h;
     const rCtx = roughnessCanvas.getContext('2d');
     const rImgData = rCtx.createImageData(w, h);
     const rDst = rImgData.data;
-    const baseRough = parseFloat(document.getElementById('matRoughness').value || 0.6);
+
+    const baseRough = numOrDefault(document.getElementById('matRoughness').value, 0.6);
+    // Modulate micro-roughness around baseRough: crevices are slightly rougher, peaks are slightly more polished
+    const modSpan = 0.32 * (1.0 - Math.abs(2.0 * baseRough - 1.0) * 0.65);
 
     for (let i = 0; i < w * h; i++) {
-        const microVar = (1.0 - heightArr[i]) * 0.4;
-        const roughVal = Math.max(0, Math.min(255, Math.floor((baseRough * 0.7 + microVar) * 255)));
+        const microVar = (0.5 - heightArr[i]) * modSpan;
+        const roughVal = Math.max(0, Math.min(255, Math.round((baseRough + microVar) * 255)));
         const idx = i * 4;
         rDst[idx]     = roughVal;
         rDst[idx + 1] = roughVal;
@@ -2617,8 +3047,44 @@ function generateAllPbrMaps() {
     }
     rCtx.putImageData(rImgData, 0, 0);
     state.roughnessCanvas = roughnessCanvas;
+}
 
-    // 4. Ambient Occlusion Screen-Space Cavity Map
+function generateMetallicMap() {
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
+    const heightArr = ensureHeightArray();
+    if (!heightArr) return;
+
+    const metallicCanvas = state.metallicCanvas || document.createElement('canvas');
+    metallicCanvas.width = w;
+    metallicCanvas.height = h;
+    const mCtx = metallicCanvas.getContext('2d');
+    const mImgData = mCtx.createImageData(w, h);
+    const mDst = mImgData.data;
+
+    const baseMetal = numOrDefault(document.getElementById('matMetalness').value, 0.1);
+    const modSpan = baseMetal > 0.02 ? 0.25 * (1.0 - Math.abs(2.0 * baseMetal - 1.0) * 0.6) : 0.0;
+
+    for (let i = 0; i < w * h; i++) {
+        // Raised ridges exhibit slightly higher metallic sheen than recessed crevices
+        const edgeWear = (heightArr[i] - 0.5) * modSpan;
+        const metalVal = Math.max(0, Math.min(255, Math.round((baseMetal + edgeWear) * 255)));
+        const idx = i * 4;
+        mDst[idx]     = metalVal;
+        mDst[idx + 1] = metalVal;
+        mDst[idx + 2] = metalVal;
+        mDst[idx + 3] = 255;
+    }
+    mCtx.putImageData(mImgData, 0, 0);
+    state.metallicCanvas = metallicCanvas;
+}
+
+function generateAoMap() {
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
+    const heightArr = ensureHeightArray();
+    if (!heightArr) return;
+
     const aoCanvas = state.aoCanvas || document.createElement('canvas');
     aoCanvas.width = w;
     aoCanvas.height = h;
@@ -2626,22 +3092,41 @@ function generateAllPbrMaps() {
     const aoImgData = aoCtx.createImageData(w, h);
     const aoDst = aoImgData.data;
 
+    const seamless = document.getElementById('seamlessTilingCheckbox').checked;
+    const aoInt = numOrDefault(document.getElementById('aoIntensity').value, 1.0);
+    const resScale = Math.max(1, Math.round(Math.min(w, h) / 256));
+    const r1 = 1 * resScale;
+    const r2 = 3 * resScale;
+    const r3 = 6 * resScale;
+
+    const wrapIdx = (coord, max) => {
+        if (seamless) return ((coord % max) + max) % max;
+        return Math.max(0, Math.min(max - 1, coord));
+    };
+
     for (let y = 0; y < h; y++) {
-        const ym1 = seamless ? (y === 0 ? h - 1 : y - 1) : Math.max(0, y - 1);
-        const yp1 = seamless ? (y === h - 1 ? 0 : y + 1) : Math.min(h - 1, y + 1);
+        const y1m = wrapIdx(y - r1, h), y1p = wrapIdx(y + r1, h);
+        const y2m = wrapIdx(y - r2, h), y2p = wrapIdx(y + r2, h);
+        const y3m = wrapIdx(y - r3, h), y3p = wrapIdx(y + r3, h);
 
         for (let x = 0; x < w; x++) {
-            const xm1 = seamless ? (x === 0 ? w - 1 : x - 1) : Math.max(0, x - 1);
-            const xp1 = seamless ? (x === w - 1 ? 0 : x + 1) : Math.min(w - 1, x + 1);
+            const x1m = wrapIdx(x - r1, w), x1p = wrapIdx(x + r1, w);
+            const x2m = wrapIdx(x - r2, w), x2p = wrapIdx(x + r2, w);
+            const x3m = wrapIdx(x - r3, w), x3p = wrapIdx(x + r3, w);
 
             const center = heightArr[y * w + x];
-            const avgNeighbor = (
-                heightArr[ym1 * w + x] + heightArr[yp1 * w + x] +
-                heightArr[y * w + xm1] + heightArr[y * w + xp1]
-            ) * 0.25;
 
-            const cavity = Math.max(0, avgNeighbor - center) * 5.0;
-            const aoVal = Math.max(0, Math.min(255, Math.floor((1.0 - cavity) * 255)));
+            const avg1 = (heightArr[y1m * w + x] + heightArr[y1p * w + x] + heightArr[y * w + x1m] + heightArr[y * w + x1p]) * 0.25;
+            const avg2 = (heightArr[y2m * w + x] + heightArr[y2p * w + x] + heightArr[y * w + x2m] + heightArr[y * w + x2p]) * 0.25;
+            const avg3 = (heightArr[y3m * w + x] + heightArr[y3p * w + x] + heightArr[y * w + x3m] + heightArr[y * w + x3p]) * 0.25;
+
+            const cav1 = Math.max(0, avg1 - center) * 3.2;
+            const cav2 = Math.max(0, avg2 - center) * 2.2;
+            const cav3 = Math.max(0, avg3 - center) * 1.4;
+            const depthOcc = Math.max(0, 0.55 - center) * 0.35;
+
+            const totalOcclusion = (cav1 + cav2 + cav3 + depthOcc) * aoInt;
+            const aoVal = Math.max(0, Math.min(255, Math.round((1.0 - totalOcclusion) * 255)));
 
             const idx = (y * w + x) * 4;
             aoDst[idx]     = aoVal;
@@ -2654,30 +3139,97 @@ function generateAllPbrMaps() {
     state.aoCanvas = aoCanvas;
 }
 
+function generateAllPbrMaps() {
+    generateHeightMap();
+    generateNormalMap();
+    generateRoughnessMap();
+    generateMetallicMap();
+    generateAoMap();
+}
+
 function render2DCanvasView() {
-    const w = state.canvas.width;
-    const h = state.canvas.height;
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
     if (w * h === 0) return;
 
-    if (state.currentViewMap === 'diffuse') return;
+    if (state.canvas.width !== w || state.canvas.height !== h) {
+        state.canvas.width = w;
+        state.canvas.height = h;
+    }
 
-    let targetSource = state.canvas;
+    let targetSource = state.diffuseCanvas;
     if (state.currentViewMap === 'normal' && state.normalCanvas) targetSource = state.normalCanvas;
     else if (state.currentViewMap === 'height' && state.heightCanvas) targetSource = state.heightCanvas;
     else if (state.currentViewMap === 'roughness' && state.roughnessCanvas) targetSource = state.roughnessCanvas;
+    else if (state.currentViewMap === 'metallic' && state.metallicCanvas) targetSource = state.metallicCanvas;
     else if (state.currentViewMap === 'ao' && state.aoCanvas) targetSource = state.aoCanvas;
 
     ctx.drawImage(targetSource, 0, 0);
 }
 
-// --- 8. MULTI-THREADED WORKER PIPELINE ---
-function generateTexture() {
-    if (isRendering) {
-        activeWorkers.forEach(w => w.terminate());
-        activeWorkers = [];
+// --- 8. MULTI-THREADED WORKER PIPELINE (WITH AUTOMATIC FALLBACK) ---
+function finalizeProceduralRender() {
+    isRendering = false;
+    generateAllPbrMaps();
+    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
+    render2DCanvasView();
+    document.getElementById('loader').classList.remove('active');
+}
+
+function runMainThreadFallback(renderId, w, h, payload) {
+    const rendererFn = getMainThreadRenderer();
+    const loader = document.getElementById('loader');
+    const loaderText = document.getElementById('loaderText');
+    const progressBar = document.getElementById('progressBar');
+
+    if (!rendererFn) {
+        loader.classList.remove('active');
+        isRendering = false;
+        return;
     }
 
+    const numSlices = 4;
+    const sliceH = Math.floor(h / numSlices);
+    let idx = 0;
+
+    function nextSlice() {
+        if (renderId !== currentRenderId) return;
+        const startY = idx * sliceH;
+        const endY = (idx === numSlices - 1) ? h : (idx + 1) * sliceH;
+        const result = rendererFn({
+            renderId, startY, endY, width: w, height: h, ...payload
+        });
+
+        const chunkImg = new ImageData(result.data, w, endY - startY);
+        diffuseCtx.putImageData(chunkImg, 0, startY);
+        if (state.currentViewMap === 'diffuse') {
+            ctx.putImageData(chunkImg, 0, startY);
+        }
+        if (result.heightData && state.rawHeights) {
+            state.rawHeights.set(result.heightData, startY * w);
+        }
+
+        idx++;
+        const pct = Math.round((idx / numSlices) * 100);
+        loaderText.innerText = `Generating procedural chunks: ${pct}%`;
+        progressBar.style.width = `${pct}%`;
+
+        if (idx < numSlices) {
+            setTimeout(nextSlice, 0);
+        } else {
+            finalizeProceduralRender();
+        }
+    }
+    setTimeout(nextSlice, 0);
+}
+
+function generateTexture() {
     if (!checkResolutionSupport()) return;
+
+    if (isRendering) {
+        // Cancel any in-flight workers cleanly and reset pool
+        terminateAllPoolWorkers();
+    }
 
     isRendering = true;
     const renderId = ++currentRenderId;
@@ -2690,14 +3242,18 @@ function generateTexture() {
     loaderText.innerText = 'Initializing workers...';
     progressBar.style.width = '0%';
 
-    const w = parseInt(document.getElementById('texWidth').value) || 256;
-    const h = parseInt(document.getElementById('texHeight').value) || 256;
+    const w = Math.round(numOrDefault(document.getElementById('texWidth').value, 256));
+    const h = Math.round(numOrDefault(document.getElementById('texHeight').value, 256));
 
     try {
         state.canvas.width = w;
         state.canvas.height = h;
         ctx = state.canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) throw new Error("Canvas context is unavailable.");
+
+        state.diffuseCanvas.width = w;
+        state.diffuseCanvas.height = h;
+        diffuseCtx = state.diffuseCanvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx || !diffuseCtx) throw new Error("Canvas context is unavailable.");
     } catch (err) {
         loader.classList.remove('active');
         isRendering = false;
@@ -2707,19 +3263,20 @@ function generateTexture() {
 
     // Uploaded Image Pipeline
     if (state.uploadedImage) {
-        ctx.drawImage(state.uploadedImage, 0, 0, w, h);
+        diffuseCtx.drawImage(state.uploadedImage, 0, 0, w, h);
 
         if (document.getElementById('seamlessBlendUpload').checked) {
-            applySeamlessEdgeBlend(state.canvas);
+            applySeamlessEdgeBlend(state.diffuseCanvas);
         }
 
-        const imgData = ctx.getImageData(0, 0, w, h);
+        const imgData = diffuseCtx.getImageData(0, 0, w, h);
         const data = imgData.data;
-        const contrast = parseFloat(document.getElementById('contrast').value);
-        const brightness = parseFloat(document.getElementById('brightness').value);
+        const contrast = numOrDefault(document.getElementById('contrast').value, 1.0);
+        const brightness = numOrDefault(document.getElementById('brightness').value, 0.0);
         const invert = document.getElementById('invert').checked;
         const threshOn = document.getElementById('thresholdEnable').checked;
-        const thresh = parseFloat(document.getElementById('threshold').value);
+        const thresh = numOrDefault(document.getElementById('threshold').value, 0.5);
+        const remapGrad = document.getElementById('remapUploadGradient').checked;
 
         state.rawHeights = new Float32Array(w * h);
 
@@ -2732,22 +3289,25 @@ function generateTexture() {
             if (threshOn) lum = lum >= thresh ? 1.0 : 0.0;
             state.rawHeights[i] = lum;
 
-            for (let c = 0; c < 3; c++) {
-                let v = data[idx + c] / 255.0;
-                if (invert) v = 1.0 - v;
-                v = (v - 0.5) * contrast + 0.5 + brightness;
-                v = Math.max(0, Math.min(1, v));
-                if (threshOn) v = v >= thresh ? 1.0 : 0.0;
-                data[idx + c] = Math.round(v * 255);
+            if (remapGrad) {
+                const col = hexToRgb(sampleColorAtPos(lum));
+                data[idx] = col[0];
+                data[idx + 1] = col[1];
+                data[idx + 2] = col[2];
+                data[idx + 3] = 255;
+            } else {
+                for (let c = 0; c < 3; c++) {
+                    let v = data[idx + c] / 255.0;
+                    if (invert) v = 1.0 - v;
+                    v = (v - 0.5) * contrast + 0.5 + brightness;
+                    v = Math.max(0, Math.min(1, v));
+                    if (threshOn) v = v >= thresh ? 1.0 : 0.0;
+                    data[idx + c] = Math.round(v * 255);
+                }
             }
         }
-        ctx.putImageData(imgData, 0, 0);
-
-        generateAllPbrMaps();
-        if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
-        render2DCanvasView();
-        loader.classList.remove('active');
-        isRendering = false;
+        diffuseCtx.putImageData(imgData, 0, 0);
+        finalizeProceduralRender();
         return;
     }
 
@@ -2755,22 +3315,22 @@ function generateTexture() {
     state.rawHeights = new Float32Array(w * h);
 
     const payload = {
-        seed: parseInt(document.getElementById('seed').value) || 12345,
+        seed: numOrDefault(document.getElementById('seed').value, 12345),
         noiseType: document.getElementById('noiseType').value,
-        scale: parseInt(document.getElementById('scale').value) || 50,
-        octaves: parseInt(document.getElementById('octaves').value) || 4,
-        persistence: parseFloat(document.getElementById('persistence').value) || 0.5,
-        lacunarity: parseFloat(document.getElementById('lacunarity').value) || 2.0,
+        scale: numOrDefault(document.getElementById('scale').value, 50),
+        octaves: numOrDefault(document.getElementById('octaves').value, 4),
+        persistence: numOrDefault(document.getElementById('persistence').value, 0.5),
+        lacunarity: numOrDefault(document.getElementById('lacunarity').value, 2.0),
         ridged: document.getElementById('ridged').checked,
-        turbStrength: parseInt(document.getElementById('turbStrength').value) || 0,
-        turbScale: parseInt(document.getElementById('turbScale').value) || 50,
+        turbStrength: numOrDefault(document.getElementById('turbStrength').value, 0),
+        turbScale: numOrDefault(document.getElementById('turbScale').value, 50),
         worleyType: document.getElementById('worleyType').value,
         worleyDist: document.getElementById('worleyDist').value,
-        contrast: parseFloat(document.getElementById('contrast').value) || 1.0,
-        brightness: parseFloat(document.getElementById('brightness').value) || 0.0,
+        contrast: numOrDefault(document.getElementById('contrast').value, 1.0),
+        brightness: numOrDefault(document.getElementById('brightness').value, 0.0),
         invert: document.getElementById('invert').checked,
         thresholdEnable: document.getElementById('thresholdEnable').checked,
-        threshold: parseFloat(document.getElementById('threshold').value) || 0.5,
+        threshold: numOrDefault(document.getElementById('threshold').value, 0.5),
         seamless: document.getElementById('seamlessTilingCheckbox').checked,
         gradientStops: state.gradientStops
     };
@@ -2779,30 +3339,28 @@ function generateTexture() {
     N = Math.max(1, Math.min(8, N));
     N = Math.min(N, h);
 
+    const workers = acquireWorkers(N);
+    if (!workers) {
+        runMainThreadFallback(renderId, w, h, payload);
+        return;
+    }
+
     const chunkHeight = Math.floor(h / N);
     let completedChunks = 0;
+    let fallbackTriggered = false;
     const livePreview = document.getElementById('livePreviewToggle').checked;
 
     for (let i = 0; i < N; i++) {
         const startY = i * chunkHeight;
         const endY = (i === N - 1) ? h : (i + 1) * chunkHeight;
-
-        let worker;
-        try {
-            worker = createWorker();
-        } catch (workerErr) {
-            console.error("Worker fallback:", workerErr);
-            loader.classList.remove('active');
-            isRendering = false;
-            return;
-        }
-
-        activeWorkers.push(worker);
+        const worker = workers[i];
 
         worker.onmessage = function(e) {
-            if (renderId !== currentRenderId) return;
+            if (renderId !== currentRenderId || fallbackTriggered) return;
 
             if (e.data && e.data.type === 'CHUNK_COMPLETE') {
+                if (e.data.renderId !== undefined && e.data.renderId !== renderId) return;
+
                 const chunkData = e.data.data;
                 const heightChunk = e.data.heightData;
                 const chunkStartY = e.data.startY;
@@ -2810,7 +3368,10 @@ function generateTexture() {
                 const localChunkH = chunkEndY - chunkStartY;
 
                 const chunkImg = new ImageData(chunkData, w, localChunkH);
-                ctx.putImageData(chunkImg, 0, chunkStartY);
+                diffuseCtx.putImageData(chunkImg, 0, chunkStartY);
+                if (state.currentViewMap === 'diffuse') {
+                    ctx.putImageData(chunkImg, 0, chunkStartY);
+                }
 
                 if (heightChunk && state.rawHeights) {
                     state.rawHeights.set(heightChunk, chunkStartY * w);
@@ -2821,34 +3382,37 @@ function generateTexture() {
                 loaderText.innerText = `Generating procedural chunks: ${percentage}%`;
                 progressBar.style.width = `${percentage}%`;
 
-                if (livePreview && threeView && threeView.isAvailable) {
-                    proxyCtx.drawImage(state.canvas, 0, 0, 512, 512);
+                if (livePreview && threeView && threeView.isAvailable && completedChunks < N) {
+                    proxyCtx.drawImage(state.diffuseCanvas, 0, 0, 512, 512);
                     threeView.applyTexture(proxyCanvas, 'diffuse');
                 }
 
                 if (completedChunks === N) {
-                    isRendering = false;
-                    activeWorkers.forEach(w => w.terminate());
-                    activeWorkers = [];
-
-                    generateAllPbrMaps();
-                    if (threeView) threeView.updateViewportChannel(threeView.currentChannel);
-                    render2DCanvasView();
-                    loader.classList.remove('active');
+                    finalizeProceduralRender();
                 }
             }
         };
 
         worker.onerror = function(err) {
-            console.error("Worker error:", err);
-            loader.classList.remove('active');
-            isRendering = false;
-            activeWorkers.forEach(w => w.terminate());
-            activeWorkers = [];
+            if (renderId !== currentRenderId || fallbackTriggered) return;
+            fallbackTriggered = true;
+            terminateAllPoolWorkers();
+
+            // If external noiseWorker.js failed (e.g. 404 or CORS), switch to inline Blob Worker & retry immediately
+            if (preferExternalWorker) {
+                preferExternalWorker = false;
+                isRendering = false;
+                generateTexture();
+            } else {
+                // If Blob Workers also failed (e.g. strict CSP), use main-thread fallback
+                workersSupported = false;
+                runMainThreadFallback(renderId, w, h, payload);
+            }
         };
 
         worker.postMessage({
             type: "RENDER_CHUNK",
+            renderId: renderId,
             startY: startY,
             endY: endY,
             width: w,
@@ -2861,7 +3425,7 @@ function generateTexture() {
 // --- 9. PRESETS & SERIALIZATION ---
 const presets = {
     stone: {
-        noiseType: 'value', scale: 120, octaves: 8, persistence: 0.55, lacunarity: 2.0,
+        noiseType: 'value', scale: 90, octaves: 8, persistence: 0.55, lacunarity: 2.0,
         contrast: 1.3, brightness: 0.05,
         matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.45, displacementScale: 0.06,
         stops: [
@@ -2882,10 +3446,10 @@ const presets = {
         ]
     },
     wood: {
-        noiseType: 'value', scale: 12, octaves: 3, persistence: 0.65, lacunarity: 2.0,
-        turbStrength: 25, turbScale: 120,
-        contrast: 1.4, brightness: 0.05,
-        matRoughness: 0.75, matMetalness: 0.0, bumpScale: 0.25, displacementScale: 0.03,
+        noiseType: 'waves', scale: 45, octaves: 4, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 18, turbScale: 90,
+        contrast: 1.35, brightness: 0.02,
+        matRoughness: 0.72, matMetalness: 0.0, bumpScale: 0.25, displacementScale: 0.03,
         stops: [
             { pos: 0.0, color: "#3d1e08" }, { pos: 0.25, color: "#5c3317" },
             { pos: 0.55, color: "#8b5e3c" }, { pos: 0.8, color: "#b58759" },
@@ -2893,7 +3457,7 @@ const presets = {
         ]
     },
     water: {
-        noiseType: 'simplex', scale: 90, octaves: 5, persistence: 0.45, lacunarity: 2.0,
+        noiseType: 'simplex', scale: 80, octaves: 5, persistence: 0.45, lacunarity: 2.0,
         ridged: true, turbStrength: 45, turbScale: 70,
         contrast: 1.3, brightness: 0.1, invert: false,
         bumpScale: 0.25, matRoughness: 0.08, matMetalness: 0.3, displacementScale: 0.04,
@@ -2901,6 +3465,17 @@ const presets = {
             { pos: 0.0, color: "#001b33" }, { pos: 0.25, color: "#004b7a" },
             { pos: 0.55, color: "#0088cc" }, { pos: 0.82, color: "#48cae4" },
             { pos: 1.0, color: "#caf0f8" }
+        ]
+    },
+    caustics: {
+        noiseType: 'caustics', scale: 65, octaves: 3, persistence: 0.5, lacunarity: 2.0,
+        turbStrength: 20, turbScale: 70,
+        contrast: 1.5, brightness: 0.05, invert: false,
+        bumpScale: 0.3, matRoughness: 0.1, matMetalness: 0.2, displacementScale: 0.04,
+        stops: [
+            { pos: 0.0, color: "#001529" }, { pos: 0.3, color: "#004675" },
+            { pos: 0.6, color: "#0096c7" }, { pos: 0.85, color: "#72efdd" },
+            { pos: 1.0, color: "#ffffff" }
         ]
     },
     clouds: {
@@ -2914,7 +3489,7 @@ const presets = {
         ]
     },
     rust: {
-        noiseType: 'simplex', scale: 45, octaves: 6, persistence: 0.65, lacunarity: 2.0,
+        noiseType: 'simplex', scale: 55, octaves: 6, persistence: 0.65, lacunarity: 2.0,
         turbStrength: 15, turbScale: 60,
         contrast: 1.5, brightness: 0.0,
         matRoughness: 0.85, matMetalness: 0.55, bumpScale: 0.6, displacementScale: 0.07,
@@ -2926,8 +3501,8 @@ const presets = {
     },
     cells: {
         noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'euclidean',
-        scale: 40, octaves: 1, persistence: 0.5, lacunarity: 2.0,
-        contrast: 2.5, brightness: 0.1, invert: false,
+        scale: 45, octaves: 1, persistence: 0.5, lacunarity: 2.0,
+        contrast: 2.2, brightness: 0.1, invert: false,
         matRoughness: 0.2, matMetalness: 0.5, bumpScale: 0.45, displacementScale: 0.05,
         stops: [
             { pos: 0.0, color: "#051205" }, { pos: 0.2, color: "#0c4722" },
@@ -2937,8 +3512,8 @@ const presets = {
     },
     ice: {
         noiseType: 'worley', worleyType: 'f2-f1', worleyDist: 'manhattan',
-        scale: 65, octaves: 1, persistence: 0.5, lacunarity: 2.0,
-        contrast: 2.0, brightness: 0.2, invert: false,
+        scale: 65, octaves: 2, persistence: 0.45, lacunarity: 2.0,
+        contrast: 1.9, brightness: 0.15, invert: false,
         bumpScale: 0.35, matRoughness: 0.08, matMetalness: 0.15, displacementScale: 0.04,
         stops: [
             { pos: 0.0, color: "#051a30" }, { pos: 0.22, color: "#104f7a" },
@@ -2947,7 +3522,7 @@ const presets = {
         ]
     },
     cyberpunk: {
-        noiseType: 'perlin', scale: 40, octaves: 4, persistence: 0.5, lacunarity: 2.0,
+        noiseType: 'perlin', scale: 50, octaves: 4, persistence: 0.5, lacunarity: 2.0,
         turbStrength: 45, turbScale: 50, contrast: 1.8, brightness: 0.0,
         matRoughness: 0.2, matMetalness: 0.85, bumpScale: 0.6, displacementScale: 0.06,
         stops: [
@@ -2957,27 +3532,37 @@ const presets = {
         ]
     },
     gold: {
-        noiseType: 'simplex', scale: 50, octaves: 5, persistence: 0.6, lacunarity: 2.0,
+        noiseType: 'simplex', scale: 60, octaves: 5, persistence: 0.6, lacunarity: 2.0,
         contrast: 1.4, brightness: 0.05,
-        matRoughness: 0.3, matMetalness: 0.95, bumpScale: 0.35, displacementScale: 0.04,
+        matRoughness: 0.25, matMetalness: 0.92, bumpScale: 0.35, displacementScale: 0.04,
         stops: [
-            { pos: 0.0, color: "#1f1406" }, { pos: 0.25, color: "#543b14" },
-            { pos: 0.55, color: "#a87f2e" }, { pos: 0.8, color: "#e8be5a" },
-            { pos: 1.0, color: "#fff0b8" }
+            { pos: 0.0, color: "#291a07" }, { pos: 0.25, color: "#6b4c1b" },
+            { pos: 0.55, color: "#c29232" }, { pos: 0.8, color: "#f5cc64" },
+            { pos: 1.0, color: "#fff3c4" }
         ]
     },
     marble: {
-        noiseType: 'perlin', scale: 65, octaves: 6, persistence: 0.55, lacunarity: 2.2,
-        turbStrength: 50, turbScale: 75, contrast: 1.6, brightness: 0.1,
+        noiseType: 'waves', scale: 75, octaves: 6, persistence: 0.55, lacunarity: 2.1,
+        turbStrength: 45, turbScale: 75, contrast: 1.5, brightness: 0.12,
         matRoughness: 0.15, matMetalness: 0.05, bumpScale: 0.2, displacementScale: 0.02,
         stops: [
-            { pos: 0.0, color: "#0d0d0d" }, { pos: 0.18, color: "#383838" },
-            { pos: 0.45, color: "#808080" }, { pos: 0.78, color: "#e0e0e0" },
+            { pos: 0.0, color: "#141414" }, { pos: 0.18, color: "#424242" },
+            { pos: 0.45, color: "#909090" }, { pos: 0.78, color: "#e6e6e6" },
             { pos: 1.0, color: "#ffffff" }
         ]
     },
+    brickwall: {
+        noiseType: 'brick', scale: 55, octaves: 4, persistence: 0.55, lacunarity: 2.1,
+        turbStrength: 4, turbScale: 40, contrast: 1.25, brightness: 0.0,
+        matRoughness: 0.88, matMetalness: 0.0, bumpScale: 0.65, displacementScale: 0.06,
+        stops: [
+            { pos: 0.0, color: "#3b3734" }, { pos: 0.22, color: "#6b5e55" },
+            { pos: 0.42, color: "#7a2c1c" }, { pos: 0.75, color: "#a8422b" },
+            { pos: 1.0, color: "#c96449" }
+        ]
+    },
     sand: {
-        noiseType: 'simplex', scale: 35, octaves: 4, persistence: 0.5, lacunarity: 2.0,
+        noiseType: 'simplex', scale: 45, octaves: 4, persistence: 0.5, lacunarity: 2.0,
         turbStrength: 20, turbScale: 100, contrast: 1.3, brightness: 0.0,
         matRoughness: 0.9, matMetalness: 0.0, bumpScale: 0.4, displacementScale: 0.05,
         stops: [
@@ -2987,8 +3572,8 @@ const presets = {
         ]
     },
     plasma: {
-        noiseType: 'simplex', scale: 50, octaves: 6, persistence: 0.65, lacunarity: 2.3,
-        ridged: true, turbStrength: 60, turbScale: 40, contrast: 2.0, brightness: 0.1,
+        noiseType: 'simplex', scale: 55, octaves: 6, persistence: 0.65, lacunarity: 2.3,
+        ridged: true, turbStrength: 60, turbScale: 50, contrast: 2.0, brightness: 0.1,
         matRoughness: 0.1, matMetalness: 0.7, bumpScale: 0.5, displacementScale: 0.07,
         stops: [
             { pos: 0.0, color: "#050014" }, { pos: 0.25, color: "#2a0066" },
@@ -2998,7 +3583,7 @@ const presets = {
     },
     leather: {
         noiseType: 'worley', worleyType: 'f1', worleyDist: 'euclidean',
-        scale: 18, octaves: 3, persistence: 0.4, lacunarity: 2.0,
+        scale: 22, octaves: 3, persistence: 0.4, lacunarity: 2.0,
         contrast: 1.3, brightness: -0.05,
         matRoughness: 0.65, matMetalness: 0.05, bumpScale: 0.5, displacementScale: 0.04,
         stops: [
@@ -3012,25 +3597,55 @@ const presets = {
 function applyStateToUI(p) {
     clearTimeout(debounceTimer);
     const defaults = {
+        seed: numOrDefault(state.inputs.seed ? state.inputs.seed.value : 12345, 12345),
         noiseType: 'perlin', scale: 50, octaves: 4, persistence: 0.5, lacunarity: 2.0, ridged: false,
         turbStrength: 0, turbScale: 50, contrast: 1.0, brightness: 0.0, invert: false,
         worleyType: 'f1', worleyDist: 'euclidean', thresholdEnable: false, threshold: 0.5,
         bumpScale: 0.3, displacementScale: 0.05, matRoughness: 0.6, matMetalness: 0.1,
-        aoIntensity: 1.0, normalStrength: 3.0, directXNormalCheckbox: false, seamlessTilingCheckbox: true,
+        aoIntensity: 1.0, normalStrength: 3.0,
+        directXNormalCheckbox: false, seamlessTilingCheckbox: true,
         stops: [{ pos: 0, color: "#000000" }, { pos: 1, color: "#ffffff" }]
     };
 
+    // Support both legacy and current JSON property names
+    const normalized = { ...p };
+    if (normalized.directXNormal !== undefined && normalized.directXNormalCheckbox === undefined) {
+        normalized.directXNormalCheckbox = normalized.directXNormal;
+    }
+    if (normalized.seamlessTiling !== undefined && normalized.seamlessTilingCheckbox === undefined) {
+        normalized.seamlessTilingCheckbox = normalized.seamlessTiling;
+    }
+
+    if (normalized.texWidth !== undefined && normalized.texHeight !== undefined) {
+        const w = Math.round(numOrDefault(normalized.texWidth, 256));
+        const h = Math.round(numOrDefault(normalized.texHeight, 256));
+        if (testCanvasAllocation(w, h)) {
+            state.inputs.texWidth.value = w;
+            state.inputs.texHeight.value = h;
+            const presetVal = `${w}x${h}`;
+            const resPresetEl = document.getElementById('resPreset');
+            const hasOption = Array.from(resPresetEl.options).some(opt => opt.value === presetVal);
+            resPresetEl.value = hasOption ? presetVal : 'custom';
+        }
+    }
+
     Object.keys(defaults).forEach(k => {
-        const val = p[k] !== undefined ? p[k] : defaults[k];
+        const val = normalized[k] !== undefined ? normalized[k] : defaults[k];
         const el = state.inputs[k];
         if (!el) return;
-        if (el.type === 'checkbox') el.checked = !!val;
+        if (el.type === 'checkbox') el.checked = Boolean(val);
         else el.value = val;
         if (el.type === 'range') updateValueLabel(k, val);
     });
 
-    state.gradientStops = JSON.parse(JSON.stringify(p.stops || defaults.stops));
+    if (Array.isArray(normalized.stops) && normalized.stops.length > 0) {
+        state.gradientStops = JSON.parse(JSON.stringify(normalized.stops));
+    } else {
+        state.gradientStops = JSON.parse(JSON.stringify(defaults.stops));
+    }
+
     renderGradientUI();
+    checkResolutionSupport();
     if (threeView) threeView.updateMaterialParams();
     generateTexture();
 }
@@ -3043,8 +3658,10 @@ function loadPreset(name) {
 
 function randomizeAll() {
     if (state.uploadedImage) clearImageUpload();
+    document.getElementById('presetSelect').value = 'custom';
+
     const r = Math.random;
-    const noiseList = ['simplex', 'perlin', 'value', 'worley'];
+    const noiseList = ['simplex', 'perlin', 'value', 'worley', 'waves', 'caustics', 'brick'];
     const randomNoise = noiseList[Math.floor(r() * noiseList.length)];
 
     const numStops = Math.floor(2 + r() * 5);
@@ -3079,37 +3696,38 @@ function randomizeAll() {
         stops: stops
     };
 
-    state.inputs.seed.value = randomState.seed;
     applyStateToUI(randomState);
 }
 
 function exportPresetJSON() {
     const config = {
-        version: "2.0-pro",
-        seed: state.inputs.seed.value,
+        version: "2.1-pro",
+        texWidth: numOrDefault(state.inputs.texWidth.value, 256),
+        texHeight: numOrDefault(state.inputs.texHeight.value, 256),
+        seed: numOrDefault(state.inputs.seed.value, 12345),
         noiseType: state.inputs.noiseType.value,
-        scale: state.inputs.scale.value,
-        octaves: state.inputs.octaves.value,
-        persistence: state.inputs.persistence.value,
-        lacunarity: state.inputs.lacunarity.value,
+        scale: numOrDefault(state.inputs.scale.value, 50),
+        octaves: numOrDefault(state.inputs.octaves.value, 4),
+        persistence: numOrDefault(state.inputs.persistence.value, 0.5),
+        lacunarity: numOrDefault(state.inputs.lacunarity.value, 2.0),
         ridged: state.inputs.ridged.checked,
-        turbStrength: state.inputs.turbStrength.value,
-        turbScale: state.inputs.turbScale.value,
+        turbStrength: numOrDefault(state.inputs.turbStrength.value, 0),
+        turbScale: numOrDefault(state.inputs.turbScale.value, 50),
         worleyType: state.inputs.worleyType.value,
         worleyDist: state.inputs.worleyDist.value,
-        contrast: state.inputs.contrast.value,
-        brightness: state.inputs.brightness.value,
+        contrast: numOrDefault(state.inputs.contrast.value, 1.0),
+        brightness: numOrDefault(state.inputs.brightness.value, 0.0),
         invert: state.inputs.invert.checked,
         thresholdEnable: state.inputs.thresholdEnable.checked,
-        threshold: state.inputs.threshold.value,
-        bumpScale: state.inputs.bumpScale.value,
-        displacementScale: state.inputs.displacementScale.value,
-        matRoughness: state.inputs.matRoughness.value,
-        matMetalness: state.inputs.matMetalness.value,
-        aoIntensity: state.inputs.aoIntensity.value,
-        normalStrength: state.inputs.normalStrength.value,
-        directXNormal: state.inputs.directXNormalCheckbox.checked,
-        seamlessTiling: state.inputs.seamlessTilingCheckbox.checked,
+        threshold: numOrDefault(state.inputs.threshold.value, 0.5),
+        bumpScale: numOrDefault(state.inputs.bumpScale.value, 0.3),
+        displacementScale: numOrDefault(state.inputs.displacementScale.value, 0.05),
+        matRoughness: numOrDefault(state.inputs.matRoughness.value, 0.6),
+        matMetalness: numOrDefault(state.inputs.matMetalness.value, 0.1),
+        aoIntensity: numOrDefault(state.inputs.aoIntensity.value, 1.0),
+        normalStrength: numOrDefault(state.inputs.normalStrength.value, 3.0),
+        directXNormalCheckbox: state.inputs.directXNormalCheckbox.checked,
+        seamlessTilingCheckbox: state.inputs.seamlessTilingCheckbox.checked,
         stops: state.gradientStops
     };
 
@@ -3132,6 +3750,8 @@ function importPresetJSON(e) {
     reader.onload = (event) => {
         try {
             const parsed = JSON.parse(event.target.result);
+            if (!parsed || typeof parsed !== 'object') throw new Error("Invalid root object");
+            document.getElementById('presetSelect').value = 'custom';
             applyStateToUI(parsed);
         } catch (err) {
             alert("Invalid preset JSON file.");
@@ -3161,30 +3781,32 @@ function downloadCanvasAsPNG(targetCanvas, filename) {
 }
 
 function downloadCurrentViewMap() {
-    const w = state.canvas.width;
-    const h = state.canvas.height;
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
     const seed = state.inputs.seed.value;
     const type = state.currentViewMap;
 
-    let target = state.canvas;
+    let target = state.diffuseCanvas;
     if (type === 'normal' && state.normalCanvas) target = state.normalCanvas;
     else if (type === 'height' && state.heightCanvas) target = state.heightCanvas;
     else if (type === 'roughness' && state.roughnessCanvas) target = state.roughnessCanvas;
+    else if (type === 'metallic' && state.metallicCanvas) target = state.metallicCanvas;
     else if (type === 'ao' && state.aoCanvas) target = state.aoCanvas;
 
     downloadCanvasAsPNG(target, `${type}_${seed}_${w}x${h}.png`);
 }
 
 function downloadAllPbrMaps() {
-    const w = state.canvas.width;
-    const h = state.canvas.height;
+    const w = state.diffuseCanvas.width;
+    const h = state.diffuseCanvas.height;
     const seed = state.inputs.seed.value;
 
     const maps = [
-        { canvas: state.canvas, name: `diffuse_${seed}_${w}x${h}.png` },
+        { canvas: state.diffuseCanvas, name: `diffuse_${seed}_${w}x${h}.png` },
         { canvas: state.normalCanvas, name: `normal_${seed}_${w}x${h}.png` },
         { canvas: state.heightCanvas, name: `height_${seed}_${w}x${h}.png` },
         { canvas: state.roughnessCanvas, name: `roughness_${seed}_${w}x${h}.png` },
+        { canvas: state.metallicCanvas, name: `metallic_${seed}_${w}x${h}.png` },
         { canvas: state.aoCanvas, name: `ao_${seed}_${w}x${h}.png` }
     ];
 
