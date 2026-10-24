@@ -2,7 +2,8 @@
  * Ultimate Texture Generator - Multi-Threaded Procedural Noise Worker
  * Zero external imports, zero DOM API dependencies. Fully standalone & native.
  * Supports: Simplex, Perlin, Value, Worley/Cellular, Sine Waves (Wood/Marble),
- * Optical Caustics, and Procedural Bricks with 2D & 4D Toroidal Seamless Tiling,
+ * Optical Caustics, Procedural Bricks, Hexagonal Honeycomb, Woven Fabric,
+ * PCB Circuitry, and Beveled Cobblestone with 2D & 4D Toroidal Seamless Tiling,
  * Octave Phase Decorrelation, Pythagorean 2D Octave Rotation, and Musgrave Ridged Multifractals.
  */
 
@@ -45,7 +46,7 @@ const G4 = (5.0 - Math.sqrt(5.0)) / 20.0;
 const ROT2_COS = 0.8;
 const ROT2_SIN = 0.6;
 
-// 12-direction 2D unit gradients for high-isotropy 2D Simplex
+// 8-direction 2D unit gradients for high-isotropy 2D Simplex
 const grad2 = [
     [1, 1], [-1, 1], [1, -1], [-1, -1],
     [1, 0], [-1, 0], [0, 1], [0, -1]
@@ -489,6 +490,181 @@ class NoiseGenerator {
         const brickLevel = 0.45 + brickTint + detailNoise * 0.35;
         return Math.max(-1, Math.min(1, lerp(mortarLevel, brickLevel, mask)));
     }
+
+    // --- Procedural Hexagonal Honeycomb / Sci-Fi Armor Plating ---
+    hexagonPattern(u, v, cols, rows, detailNoise) {
+        const c = Math.max(2, Math.round(cols / 2) * 2); // Even column count guarantees horizontal stagger wrap
+        const r = Math.max(2, Math.round(rows));
+        const gx = (((u % 1) + 1) % 1) * c;
+        const gy = (((v % 1) + 1) % 1) * r;
+        const ix0 = Math.floor(gx);
+        const iy0 = Math.floor(gy);
+
+        let minDist = 100.0;
+        let secondMinDist = 100.0;
+        let bestCol = 0;
+        let bestRow = 0;
+
+        for (let dy = -1; dy <= 2; dy++) {
+            for (let dx = -1; dx <= 2; dx++) {
+                const col = ix0 + dx;
+                const row = iy0 + dy;
+                const staggerY = (col & 1) * 0.5;
+                const cx = col + 0.5;
+                const cy = row + 0.5 + staggerY;
+                const vx = gx - cx;
+                const vy = gy - cy;
+                // Scaled metric d = sqrt(0.75 * vx^2 + vy^2) places all 6 hex neighbors at exact unit distance
+                const d = Math.sqrt(0.75 * vx * vx + vy * vy);
+                if (d < minDist) {
+                    secondMinDist = minDist;
+                    minDist = d;
+                    bestCol = ((col % c) + c) % c;
+                    bestRow = ((row % r) + r) % r;
+                } else if (d < secondMinDist) {
+                    secondMinDist = d;
+                }
+            }
+        }
+
+        const edgeDist = secondMinDist - minDist;
+        const mortar = 0.055;
+        const bevel = 0.095;
+        const mask = fade(Math.max(0.0, Math.min(1.0, (edgeDist - mortar) / bevel)));
+        const cellTint = (this.cellHash(bestCol, bestRow, 9) - 0.5) * 0.32;
+        const dome = Math.max(0.0, 1.0 - minDist * 0.45);
+
+        const seamLevel = -0.9 + detailNoise * 0.12;
+        const plateLevel = 0.25 + dome * 0.35 + cellTint + detailNoise * 0.25;
+        return Math.max(-1, Math.min(1, lerp(seamLevel, plateLevel, mask)));
+    }
+
+    // --- Procedural Interlaced Woven Fabric / Basketweave ---
+    weavePattern(u, v, cols, rows, detailNoise) {
+        const c = Math.max(2, Math.round(cols / 2) * 2);
+        const r = Math.max(2, Math.round(rows / 2) * 2);
+        const gx = (((u % 1) + 1) % 1) * c;
+        const gy = (((v % 1) + 1) % 1) * r;
+        const ix = Math.floor(gx);
+        const iy = Math.floor(gy);
+        const fx = gx - ix;
+        const fy = gy - iy;
+
+        const parity = (ix + iy) & 1;
+        const edgeX = Math.max(0.0, 1.0 - Math.pow(Math.abs(fx * 2.0 - 1.0), 2.2));
+        const edgeY = Math.max(0.0, 1.0 - Math.pow(Math.abs(fy * 2.0 - 1.0), 2.2));
+
+        // C1-continuous sinusoidal thread arch across alternating cells
+        const archWarp = 0.5 + 0.5 * Math.cos(Math.PI * (fy + parity));
+        const archWeft = 0.5 + 0.5 * Math.cos(Math.PI * (fx + (1 - parity)));
+
+        const microWarp = Math.sin(fx * Math.PI * 10.0) * 0.06;
+        const microWeft = Math.sin(fy * Math.PI * 10.0) * 0.06;
+
+        const warpHeight = edgeX * (0.35 + 0.65 * archWarp) + microWarp;
+        const weftHeight = edgeY * (0.35 + 0.65 * archWeft) + microWeft;
+
+        const topThread = parity === 0 ? warpHeight : weftHeight;
+        const bottomThread = parity === 0 ? weftHeight * 0.55 : warpHeight * 0.55;
+        const combined = Math.max(topThread, bottomThread);
+
+        return Math.max(-1, Math.min(1, (combined * 1.85 - 0.85) + detailNoise * 0.24));
+    }
+
+    // --- Procedural PCB Circuitry / Cybernetic Traces ---
+    circuitPattern(u, v, cols, rows, detailNoise) {
+        const c = Math.max(2, Math.round(cols));
+        const r = Math.max(2, Math.round(rows));
+        const gx = (((u % 1) + 1) % 1) * c;
+        const gy = (((v % 1) + 1) % 1) * r;
+        const ix = ((Math.floor(gx) % c) + c) % c;
+        const iy = ((Math.floor(gy) % r) + r) % r;
+        const fx = gx - Math.floor(gx);
+        const fy = gy - Math.floor(gy);
+
+        const h1 = this.cellHash(ix, iy, 11);
+        const h2 = this.cellHash(ix, iy, 12);
+
+        // Continuous Smith-Truchet quarter-circle arcs connecting cell edge midpoints
+        let dArc1, dArc2;
+        if (h1 < 0.5) {
+            dArc1 = Math.abs(Math.sqrt(fx * fx + fy * fy) - 0.5);
+            dArc2 = Math.abs(Math.sqrt((1.0 - fx) * (1.0 - fx) + (1.0 - fy) * (1.0 - fy)) - 0.5);
+        } else {
+            dArc1 = Math.abs(Math.sqrt((1.0 - fx) * (1.0 - fx) + fy * fy) - 0.5);
+            dArc2 = Math.abs(Math.sqrt(fx * fx + (1.0 - fy) * (1.0 - fy)) - 0.5);
+        }
+
+        const dTrace = Math.min(dArc1, dArc2);
+        // Parallel dual-bus sub-traces
+        const busRing = Math.abs(dTrace - 0.11);
+        const primaryTrace = 1.0 - fade(Math.min(1.0, dTrace / 0.065));
+        const secondaryTrace = (1.0 - fade(Math.min(1.0, busRing / 0.038))) * 0.72;
+
+        // Solder via pads at cell centers for a subset of cells
+        let viaPad = 0.0;
+        if (h2 > 0.58) {
+            const dc = Math.sqrt((fx - 0.5) * (fx - 0.5) + (fy - 0.5) * (fy - 0.5));
+            const outerPad = 1.0 - fade(Math.min(1.0, Math.max(0.0, dc - 0.12) / 0.045));
+            const drillHole = 1.0 - fade(Math.min(1.0, dc / 0.055));
+            viaPad = Math.max(0.0, outerPad - drillHole * 0.85);
+        }
+
+        const traceMask = Math.max(primaryTrace, secondaryTrace, viaPad);
+        const boardBase = -0.75 + detailNoise * 0.18 + (h2 - 0.5) * 0.12;
+        const copperTop = 0.78 + detailNoise * 0.14;
+        return Math.max(-1, Math.min(1, lerp(boardBase, copperTop, traceMask)));
+    }
+
+    // --- Procedural Beveled Cobblestone / Medieval Pavers ---
+    cobblePattern(u, v, cols, rows, detailNoise) {
+        const c = Math.max(2, Math.round(cols));
+        const r = Math.max(2, Math.round(rows));
+        const gx = (((u % 1) + 1) % 1) * c;
+        const gy = (((v % 1) + 1) % 1) * r;
+        const ix0 = Math.floor(gx);
+        const iy0 = Math.floor(gy);
+        const fx = gx - ix0;
+        const fy = gy - iy0;
+
+        let minDist = 100.0;
+        let secondMinDist = 100.0;
+        let bestX = 0;
+        let bestY = 0;
+
+        for (let dy = -2; dy <= 2; dy++) {
+            for (let dx = -2; dx <= 2; dx++) {
+                const nx = ix0 + dx;
+                const ny = iy0 + dy;
+                const wx = ((nx % c) + c) % c;
+                const wy = ((ny % r) + r) % r;
+
+                const px = dx + 0.15 + 0.70 * this.cellHash(wx, wy, 1);
+                const py = dy + 0.15 + 0.70 * this.cellHash(wx, wy, 2);
+                const dist = Math.sqrt((px - fx) * (px - fx) + (py - fy) * (py - fy));
+
+                if (dist < minDist) {
+                    secondMinDist = minDist;
+                    minDist = dist;
+                    bestX = wx;
+                    bestY = wy;
+                } else if (dist < secondMinDist) {
+                    secondMinDist = dist;
+                }
+            }
+        }
+
+        const border = secondMinDist - minDist;
+        const mortarGap = 0.06;
+        const bevelSpan = 0.19;
+        const stoneMask = fade(Math.max(0.0, Math.min(1.0, (border - mortarGap) / bevelSpan)));
+        const crown = Math.max(0.0, 1.0 - minDist * 0.65);
+        const stoneTint = (this.cellHash(bestX, bestY, 5) - 0.5) * 0.34;
+
+        const mortarVal = -0.88 + detailNoise * 0.18;
+        const stoneVal = 0.22 + crown * 0.48 + stoneTint + detailNoise * 0.32;
+        return Math.max(-1, Math.min(1, lerp(mortarVal, stoneVal, stoneMask)));
+    }
 }
 
 // 3. COLOR PARSING & C1-SMOOTH GRADIENT LOOKUP TABLE
@@ -713,7 +889,7 @@ function renderNoiseChunk(params) {
                     amplitude *= persistence;
                     freq *= lacunarity;
                 }
-            } else if (noiseType === 'brick') {
+            } else if (noiseType === 'brick' || noiseType === 'hexagon' || noiseType === 'weave' || noiseType === 'circuit' || noiseType === 'cobble') {
                 let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
                 for (let o = 0; o < octaves; o++) {
                     const off = OCTAVE_OFFSETS_4D[o & 15];
@@ -723,7 +899,12 @@ function renderNoiseChunk(params) {
                     freq *= lacunarity;
                 }
                 if (fbmMax > 0) fbm /= fbmMax;
-                let n = noiseGen.brickPattern(((u % 1) + 1) % 1, ((v % 1) + 1) % 1, brickCols, brickRows, fbm);
+                let n;
+                if (noiseType === 'brick') n = noiseGen.brickPattern(u, v, brickCols, brickRows, fbm);
+                else if (noiseType === 'hexagon') n = noiseGen.hexagonPattern(u, v, brickCols, brickCols, fbm);
+                else if (noiseType === 'weave') n = noiseGen.weavePattern(u, v, brickCols, brickCols, fbm);
+                else if (noiseType === 'circuit') n = noiseGen.circuitPattern(u, v, brickCols, brickCols, fbm);
+                else n = noiseGen.cobblePattern(u, v, brickCols, brickCols, fbm);
                 if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                 noiseValue = n;
                 maxValue = 1;
@@ -778,7 +959,7 @@ function renderNoiseChunk(params) {
                     const nry = (rx * ROT2_SIN + ry * ROT2_COS) * lacunarity;
                     rx = nrx; ry = nry;
                 }
-            } else if (noiseType === 'brick') {
+            } else if (noiseType === 'brick' || noiseType === 'hexagon' || noiseType === 'weave' || noiseType === 'circuit' || noiseType === 'cobble') {
                 let fbm = 0, fbmMax = 0, amplitude = 1, freq = 1;
                 for (let o = 0; o < octaves; o++) {
                     fbm += noiseGen.simplex2d(baseSx * freq * 2 + o * 17.3, baseSy * freq * 2 + o * 29.7) * amplitude;
@@ -787,7 +968,12 @@ function renderNoiseChunk(params) {
                     freq *= lacunarity;
                 }
                 if (fbmMax > 0) fbm /= fbmMax;
-                let n = noiseGen.brickPattern(u, v, brickCols, brickRows, fbm);
+                let n;
+                if (noiseType === 'brick') n = noiseGen.brickPattern(u, v, brickCols, brickRows, fbm);
+                else if (noiseType === 'hexagon') n = noiseGen.hexagonPattern(u, v, brickCols, brickCols, fbm);
+                else if (noiseType === 'weave') n = noiseGen.weavePattern(u, v, brickCols, brickCols, fbm);
+                else if (noiseType === 'circuit') n = noiseGen.circuitPattern(u, v, brickCols, brickCols, fbm);
+                else n = noiseGen.cobblePattern(u, v, brickCols, brickCols, fbm);
                 if (ridged) { n = 1.0 - Math.abs(n); n = n * n; }
                 noiseValue = n;
                 maxValue = 1;
